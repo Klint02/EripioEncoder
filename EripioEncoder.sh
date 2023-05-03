@@ -86,12 +86,13 @@ SubtitleExtractor() {
 }
 
 DetermineFinalArgument() {
+    echo ${filenameFormattet%.*}
     if [[ -z $input1 ]]; then
-        ffmpeg -i "$folderOrFile" -metadata title="${filenameFormattet%.*}" $ffmpegArgs "${folderOrFile%/*}/0encoded/${filenameFormattet%.*}.$fileExtension"
+        ffmpeg -i "$folderOrFile" $ffmpegArgs -metadata title="${filenameFormattet%.*}" "${folderOrFile%/*}/0encoded/${filenameFormattet%.*}.$fileExtension"
     elif [[ -z $input2 ]]; then
-        ffmpeg -i "$folderOrFile" -metadata title="${filenameFormattet%.*}" $input1 "$sub1" $ffmpegArgs $ffmpegSubMetaArgs "${folderOrFile%/*}/0encoded/${filenameFormattet%.*}.$fileExtension"
+       ffmpeg -i "$folderOrFile"  $input1 "$sub1" $ffmpegArgs $ffmpegSubMetaArgs -metadata title="${filenameFormattet%.*}" "${folderOrFile%/*}/0encoded/${filenameFormattet%.*}.$fileExtension"
     else
-        ffmpeg -i "$folderOrFile" -metadata title="${filenameFormattet%.*}" $input1 "$sub1" $input2 "$sub2" $ffmpegArgs $ffmpegSubMetaArgs "${folderOrFile%/*}/0encoded/${filenameFormattet%.*}.$fileExtension"
+        ffmpeg -i "$folderOrFile" $input1 "$sub1" $input2 "$sub2" $ffmpegArgs $ffmpegSubMetaArgs -metadata title="${filenameFormattet%.*}" "${folderOrFile%/*}/0encoded/${filenameFormattet%.*}.$fileExtension"
     fi
 }
 
@@ -144,7 +145,7 @@ MenuContentSwitcher () {
             # Root menu
             OPTIONS=(1 "Single file"
                      2 "Folder"
-                     3 "Folder and subfolder")
+                     3 "Folder and subfolder (UNTESTED)")
 
             RunDialog
 
@@ -193,15 +194,15 @@ MenuContentSwitcher () {
                     ;;
                     
                     3)
-                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:1038 -codec:a libvorbis -qscale:a 5 -map -0:s"
+                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:1036 -codec:a libvorbis -qscale:a 5 -map -0:s"
                     ;;
 
                     4)
-                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:816 -codec:a libvorbis -qscale:a 5 -map -0:s"
+                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:814 -codec:a libvorbis -qscale:a 5 -map -0:s"
                     ;;
                     
                     5)
-                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:804 -codec:a libvorbis -qscale:a 5 -map -0:s"
+                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:802 -codec:a libvorbis -qscale:a 5 -map -0:s"
                     ;;
                     
                     6)
