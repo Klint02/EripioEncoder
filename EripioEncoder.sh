@@ -190,27 +190,27 @@ MenuContentSwitcher () {
 
             case $CHOICE in
                     1)
-                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -codec:a libvorbis -qscale:a 5 -map -0:s"
+                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -codec:a eac3 -map -0:s"
                     ;;
                     
                     2)
-                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:1080 -codec:a libvorbis -qscale:a 5 -map -0:s"
+                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:1080 -codec:a eac3 -map -0:s"
                     ;;
                     
                     3)
-                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:1036 -codec:a libvorbis -qscale:a 5 -map -0:s"
+                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:1036 -codec:a eac3 -map -0:s"
                     ;;
 
                     4)
-                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:814 -codec:a libvorbis -qscale:a 5 -map -0:s"
+                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:814 -codec:a eac3 -map -0:s"
                     ;;
                     
                     5)
-                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:802 -codec:a libvorbis -qscale:a 5 -map -0:s"
+                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:802 -codec:a eac3 -map -0:s"
                     ;;
                     
                     6)
-                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:800 -codec:a libvorbis -qscale:a 5 -map -0:s"
+                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:800 -codec:a eac3 -map -0:s"
                     ;;
             esac
             ExcecuteRipper
