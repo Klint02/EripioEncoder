@@ -36,7 +36,7 @@ RunDialog() {
 
 SubtitleExtractor() {
     subtitleedit /convert "$folderOrFile" subrip
-    
+
     array[0]=""
     array[1]=""
     i=0
@@ -70,15 +70,15 @@ SubtitleExtractor() {
     done < <(ls)
     echo $i
     if [ $i == 2 ]; then
-        sed -i 's/|/I/gI' "${folderOrFile%.*}.${array[0]}.srt"
-        sed -i 's/|/I/gI' "${folderOrFile%.*}.${array[1]}.srt"
+        sed -i 's/|/i/gI' "${folderOrFile%.*}.${array[0]}.srt"
+        sed -i 's/|/i/gI' "${folderOrFile%.*}.${array[1]}.srt"
         sub1="${folderOrFile%.*}.${array[0]}.srt"
         sub2="${folderOrFile%.*}.${array[1]}.srt"
         input1=" -i"
         input2=" -i"
         ffmpegSubMetaArgs=" -map 1:s -metadata:s:s:0 language=${array[0]} -map 2:s -metadata:s:s:1 language=${array[1]} -c:s copy "
     elif [ $i == 1 ]; then
-        sed -i 's/|/I/gI' "${folderOrFile%.*}.${array[0]}.srt"
+        sed -i 's/|/i/gI' "${folderOrFile%.*}.${array[0]}.srt"
         sub1="${folderOrFile%.*}.${array[0]}.srt"
         input1=" -i"
         ffmpegSubMetaArgs=" -map 1:s -metadata:s:s:0 language=${array[0]} -c:s copy "
