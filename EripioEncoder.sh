@@ -36,7 +36,7 @@ RunDialog() {
 }
 
 SubtitleExtractor() {
-    if [ $ffmpegArgs != " -map 0 -codec:v copy -codec:a copy -map -0:s" ]; then 
+    if [ "$ffmpegArgs" != " -map 0 -codec:v copy -codec:a copy -map -0:s" ]; then 
         subtitleedit /convert "$folderOrFile" subrip
     fi
 
