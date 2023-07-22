@@ -189,7 +189,7 @@ MenuContentSwitcher () {
                         5 "2.35:1 crop"
                         6 "2.39:1 crop"
                         7 "2.40:1 crop"
-                        8 "copy video and audio")
+                        8 "copy video and audio and do not run subedit")
             
             RunDialog
             fileExtension="mkv"
