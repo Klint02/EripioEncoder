@@ -18,6 +18,7 @@ sub2=""
 
 fileExtension=""
 
+
 ffmpegArgs=""
 ffmpegSubInputArgs=""
 ffmpegSubMetaArgs=""
@@ -35,7 +36,9 @@ RunDialog() {
 }
 
 SubtitleExtractor() {
-    subtitleedit /convert "$folderOrFile" subrip
+    if [ $ffmpegArgs != " -map 0 -codec:v copy -codec:a copy -map -0:s" ]; then 
+        subtitleedit /convert "$folderOrFile" subrip
+    fi
 
     array[0]=""
     array[1]=""
@@ -185,7 +188,8 @@ MenuContentSwitcher () {
                         4 "2.00:1 crop"
                         5 "2.35:1 crop"
                         6 "2.39:1 crop"
-                        7 "2.40:1 crop")
+                        7 "2.40:1 crop"
+                        8 "copy video and audio")
             
             RunDialog
             fileExtension="mkv"
@@ -220,6 +224,11 @@ MenuContentSwitcher () {
                     7)
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:800 -codec:a eac3 -map -0:s"
                     ;;
+
+                    8)
+                        ffmpegArgs=" -map 0 -codec:v copy -codec:a copy -map -0:s"
+                    ;;
+
             esac
             ExcecuteRipper
             
