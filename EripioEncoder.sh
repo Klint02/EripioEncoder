@@ -50,14 +50,10 @@ SubtitleExtractor() {
     do
         check=`echo "$line" | grep "$tmp"`
 
-        if [[ -z $check ]];  then 
-            echo "";
-        else
+        if [[ -n $check ]];  then 
             check=`echo "$line" | grep ".srt"`
 
-            if [[ -z $check ]];  then 
-                echo "";
-            else
+            if [[ -n $check ]];  then 
                 echo "Match found";
 
                 echo "$line" | grep "$tmp";
@@ -183,17 +179,18 @@ MenuContentSwitcher () {
         ;;
         "FFMPEG")
             OPTIONS=(1 "no aspectratio change"
-                        2 "1.66:1 crop"
-                        3 "1.78:1 crop"
-                        4 "1.85:1 crop"
-                        5 "2.00:1 crop"
-                        6 "2.20:1 crop"
-                        7 "2.27:1 crop"
-                        8 "2.35:1 crop"
-                        9 "2.39:1 crop"
-                        10 "2.40:1 crop"
-                        11 "2.66:1 crop"
-                        12 "copy video and audio and do not run subedit")
+                        2 "1.33:1 crop (4:3)"
+                        3 "1.66:1 crop"
+                        4 "1.78:1 crop"
+                        5 "1.85:1 crop"
+                        6 "2.00:1 crop"
+                        7 "2.20:1 crop"
+                        8 "2.27:1 crop"
+                        9 "2.35:1 crop"
+                        10 "2.39:1 crop"
+                        11 "2.40:1 crop"
+                        12 "2.66:1 crop"
+                        13 "copy video and audio and do not run subedit")
             
             RunDialog
             fileExtension="mkv"
@@ -206,46 +203,50 @@ MenuContentSwitcher () {
                     ;;
 
                     2)
+                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1440:1080 -codec:a eac3 -map -0:s"
+                    ;;                    
+
+                    3)
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1794:1080 -codec:a eac3 -map -0:s"
                     ;;
                     
-                    3)
+                    4)
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:1080 -codec:a eac3 -map -0:s"
                     ;;
                     
-                    4)
+                    5)
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:1036 -codec:a eac3 -map -0:s"
                     ;;
 
-                    5)
+                    6)
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:960 -codec:a eac3 -map -0:s"
                     ;;
 
-                    6)
+                    7)
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:874 -codec:a eac3 -map -0:s"
                     ;;
 
-                    7)
+                    8)
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:846 -codec:a eac3 -map -0:s"
                     ;;
 
-                    8)
+                    9)
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:814 -codec:a eac3 -map -0:s"
                     ;;
                     
-                    9)
+                    10)
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:802 -codec:a eac3 -map -0:s"
                     ;;
                     
-                    10)
+                    11)
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:800 -codec:a eac3 -map -0:s"
                     ;;
 
-                    11)
+                    12)
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:724 -codec:a eac3 -map -0:s"
                     ;;
 
-                    12)
+                    13)
                         ffmpegArgs=" -map 0 -codec:v copy -codec:a copy -map -0:s"
                     ;;
 
