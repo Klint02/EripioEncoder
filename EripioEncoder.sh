@@ -185,12 +185,15 @@ MenuContentSwitcher () {
                         5 "1.85:1 crop"
                         6 "2.00:1 crop"
                         7 "2.20:1 crop"
-                        8 "2.27:1 crop"
-                        9 "2.35:1 crop"
-                        10 "2.39:1 crop"
-                        11 "2.40:1 crop"
-                        12 "2.66:1 crop"
-                        13 "copy video and audio and do not run subedit")
+                        8 "2.24:1 crop"
+                        9 "2.27:1 crop"
+                        10 "2.35:1 crop"
+                        11 "2.39:1 crop"
+                        12 "2.40:1 crop"
+                        13 "2.55:1 crop"
+                        14 "2.66:1 crop"
+                        15 "2.75:1 crop"
+                        16 "copy video and audio and do not run subedit")
             
             RunDialog
             fileExtension="mkv"
@@ -198,55 +201,67 @@ MenuContentSwitcher () {
 
 
             case $CHOICE in
-                    1)
+                    1)  #no aspectratio change
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -codec:a eac3 -map -0:s"
                     ;;
 
-                    2)
+                    2)  #1.33:1 crop (4:3)
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1440:1080 -codec:a eac3 -map -0:s"
                     ;;                    
 
-                    3)
+                    3)  #1.66:1 crop
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1794:1080 -codec:a eac3 -map -0:s"
                     ;;
                     
-                    4)
+                    4)  #1.78:1 crop
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:1080 -codec:a eac3 -map -0:s"
                     ;;
                     
-                    5)
+                    5)  #1.85:1 crop
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:1036 -codec:a eac3 -map -0:s"
                     ;;
 
-                    6)
+                    6)  #2.00:1 crop
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:960 -codec:a eac3 -map -0:s"
                     ;;
 
-                    7)
+                    7)  #2.20:1 crop
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:874 -codec:a eac3 -map -0:s"
                     ;;
 
-                    8)
+                    8)  #2.24:1 crop
+                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:858 -codec:a eac3 -map -0:s"
+                    ;;
+
+                    9)  #2.27:1 crop
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:846 -codec:a eac3 -map -0:s"
                     ;;
 
-                    9)
+                    10) #2.35:1 crop
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:814 -codec:a eac3 -map -0:s"
                     ;;
                     
-                    10)
+                    11) #2.39:1 crop
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:802 -codec:a eac3 -map -0:s"
                     ;;
                     
-                    11)
+                    12) #2.40:1 crop
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:800 -codec:a eac3 -map -0:s"
                     ;;
 
-                    12)
+                    13) #2.55:1 crop
+                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:754 -codec:a eac3 -map -0:s"
+                    ;;
+
+                    14) #2.66:1 crop
                         ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:724 -codec:a eac3 -map -0:s"
                     ;;
 
-                    13)
+                    15) #2.75:1 crop
+                        ffmpegArgs=" -map 0 -codec:v libx265 -crf 21 -filter:v crop=1920:700 -codec:a eac3 -map -0:s"
+                    ;;
+
+                    16)
                         ffmpegArgs=" -map 0 -codec:v copy -codec:a copy -map -0:s"
                     ;;
 
