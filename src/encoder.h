@@ -77,6 +77,7 @@ class Encoder
                 FILE *process_ffprobe = popen(arg.c_str() , "r");
                 if(process_ffprobe != NULL) {
 	                while(fgets(output_buffer, sizeof(output_buffer), process_ffprobe) != NULL) {
+                        std::cout << output_buffer << std::endl;
                     }
                 }
                 pclose(process_ffprobe);
@@ -90,9 +91,24 @@ class Encoder
                 FILE *subtitleedit = popen(arg.c_str() , "r");
                 if(subtitleedit != NULL) {
 	                while(fgets(output_buffer, sizeof(output_buffer), subtitleedit) != NULL) {
+                        std::cout << output_buffer << std::endl;
+
                     }
                 }
                 pclose(subtitleedit);
+
+                arg = "ffmpeg -i \"" + file.path().string() + "\"  -map 0 -codec:v copy -codec:a copy -map -0:s test.mkv"; 
+                FILE *ffmpeg = popen(arg.c_str() , "r");
+                if(ffmpeg != NULL) {
+	                while(fgets(output_buffer, sizeof(output_buffer), ffmpeg) != NULL) {
+                        std::cout << output_buffer << std::endl;
+
+                    }
+                }
+                pclose(ffmpeg);
+
+                std::cout << output_buffer << std::endl;
+
 
 
             }
