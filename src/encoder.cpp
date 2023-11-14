@@ -1,27 +1,52 @@
 #include <cmath>
+#include <iostream>
+#include <vector>
 #include <filesystem>
+#include "raylib.h"
+
+
+// ffmpeg -i Fullmetal\ Alchemist\ Brotherhood\ \(2009\)\ -\ S01E01.mkv -c:v libx265 -crf 21 -map 0 -c:a eac3 -ac:0 6 -ac:1 6 -map -0:s test.mkv
+
 namespace fs = std::filesystem;
 
 class Encoder 
 {
     public:
-        enum resolution { FHD_WIDTH = 1920, FHD_HEIGHT = 1080, UHD_WIDTH = 3840, UHD_HEIGHT = 2160 };
+        //enum resolution { FHD_WIDTH = 1920, FHD_HEIGHT = 1080, UHD_WIDTH = 3840, UHD_HEIGHT = 2160 };
 
-        struct Video_file {
-            std::filesystem::directory_entry path;
-            std::string video_title;
 
-            int subtitle_count;
 
-            int original_width;
 
-            int width;
-            int height;
-            
-        };
-
+        std::vector<std::string> paths;
+        Image hello;
         Video_file video;
 
+        void store_video_paths () {
+            std::string current_path = fs::current_path();
+            
+            for (const auto& entry : fs::directory_iterator(current_path)) 
+            {
+                if (entry.path().extension() == ".mkv" || entry.path().extension() == ".mp4") paths.push_back(entry.path().string()); 
+                
+
+            }
+
+            std::cout << paths.size() << std::endl;
+
+        } 
+
+
+
+        void find_resolution(std::string image_path) 
+        {
+            
+            hello = LoadImage(image_path.c_str());
+            Color pixel = GetImageColor(hello, 4, 1080);
+            std::cout << "pixel is this color: " << (int)pixel.r << (int)pixel.g << (int)pixel.b << std::endl;
+            //FFMPEG exampleP
+            //ffmpeg -i Fullmetal\ Alchemist\ Brotherhood\ \(2009\)\ -\ S01E01.mkv -r 1/660 img%03d.png
+        }
+        /*
         void find_resolution (std::filesystem::directory_entry entry) 
         {
             auto batch_folder_name = entry.path().filename().string();
@@ -63,11 +88,12 @@ class Encoder
                 }
             }
         }
+        */
 
         void set_video_metadata(std::filesystem::directory_entry entry) {
             entry.path().filename().string();
         }
-
+/*
         void run(std::filesystem::directory_entry entry) {
             for (const auto& file : fs::directory_iterator(entry.path())) 
             {
@@ -114,14 +140,13 @@ class Encoder
             }
             
 
-/*
             if (current_path == "") {
                 std::cerr << "No path was set" << std::endl;
                 throw(0);
             }
-*/
 
             //std::cout << "FHD_video_width " << FHD_video_width << " FHD_video_height " << FHD_video_height << std::endl;
 
         }
+*/        
 };
