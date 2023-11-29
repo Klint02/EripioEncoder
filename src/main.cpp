@@ -6,6 +6,8 @@
 #include <thread>
 #include <algorithm>
 #include <format>
+#include "raylib.h"
+
 
 namespace fs = std::filesystem;
 
@@ -32,10 +34,12 @@ struct Video_file {
     int original_height;
     int original_width;
 
-    int width;
-    int height;
+    int width[2] = {INT32_MAX, -1};
+    int height[2] = {INT32_MAX, -1};;
     
 };
+
+enum { LETTERBOX, PILLARBOX , FULLBOX, UNDEFINED = -1 };
 
 const int THIRTY_MINUTES = 60*30;
 const int ONE_HOUR = 60*60;
@@ -133,6 +137,7 @@ inline Timestamp return_duration_seperated(int duration) {
  */    return video_duration;
 }
 
+//TODO: Take screenshots every five minutes to minimize aspect ratio misses for multi aspect ratio movies
 inline std::vector<Timestamp> create_timestamps(int duration, int screenshot_amount) {
     std::vector<Timestamp> timestamps;
     int duration_offset = duration / (screenshot_amount + 1);
@@ -156,7 +161,6 @@ void calculate_movie_aspect_ratios (std::unordered_map<std::string, Video_file>*
         const int duration = stoi(cmd_exec("ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 \"" + movie.second.path + "\"", "v"));
 
         std::cout << movie.second.original_width << "x" << movie.second.original_height << std::endl;
-        //cmd_exec("ffmpeg -ss 00:12:30 -i \"" + movie.second.path + "\" -vframes 1 \"" + movie.second.video_title + ".png\"", "");
 
         std::vector<Timestamp> timestamps;
         if (duration < THIRTY_MINUTES) {
@@ -172,12 +176,122 @@ void calculate_movie_aspect_ratios (std::unordered_map<std::string, Video_file>*
         }
 
         std::cout << movie.second.video_title << std::endl;
+        int aspect_ratio_type = -1;
+
         for(int i = 0; i < (int)timestamps.size(); i++) {
             Timestamp timestamp = timestamps.at(i); 
             std::string arg = std::format("ffmpeg -ss {0}:{1}:{2} -i \"{3}\" -vframes 1 \"{4}.{5}.png\"", timestamp.hours, timestamp.minutes, timestamp.seconds, movie.second.path, movie.second.video_title, i);
             std::cout << arg << std::endl;
-            //cmd_exec(arg, "");
+            cmd_exec(arg, "");
+            //std::cout << movie.second.path.substr(0, movie.second.path.find_last_of(".")) << std::endl;
+            std::string movie_frame_path = std::format("{0}.{1}.png", movie.second.path.substr(0, movie.second.path.find_last_of(".")), i);  
+            Image frame = LoadImage(movie_frame_path.c_str());
+            //Color pixel = GetImageColor(frame, 4, 1079);
+            //std::cout << "pixel is this color: " << (int)pixel.r << (int)pixel.g << (int)pixel.b << std::endl;
+            
+            //Adjust to make it more or less discriminative of black pixels 
+            int over_correction = 2;
 
+            int accumulator_pixel_t = 0;
+            int accumulator_pixel_b = 0;
+            for (int p_x = 0; p_x < movie.second.original_width; p_x++) {
+                Color pixel_one = GetImageColor(frame, p_x, 0);
+                Color pixel_two = GetImageColor(frame, p_x, movie.second.original_height - 1);
+                accumulator_pixel_t += (int)pixel_one.r + (int)pixel_one.g + (int)pixel_one.b;
+                accumulator_pixel_b += (int)pixel_two.r + (int)pixel_two.g + (int)pixel_two.b;
+
+            }
+            if (!accumulator_pixel_t && !accumulator_pixel_b) {
+                aspect_ratio_type = LETTERBOX;
+            } else {
+                aspect_ratio_type = FULLBOX;
+            }
+
+            accumulator_pixel_t = 0;
+            accumulator_pixel_b = 0;
+            for (int p_y = 0; p_y < movie.second.original_height; p_y++) {
+                Color pixel_one = GetImageColor(frame, 0, p_y);
+                Color pixel_two = GetImageColor(frame, movie.second.original_width -1, p_y);
+                accumulator_pixel_t += (int)pixel_one.r + (int)pixel_one.g + (int)pixel_one.b;
+                accumulator_pixel_b += (int)pixel_two.r + (int)pixel_two.g + (int)pixel_two.b;
+
+            }
+
+            if (!accumulator_pixel_t && !accumulator_pixel_b) {
+                aspect_ratio_type = PILLARBOX;
+            }
+
+            if (aspect_ratio_type == LETTERBOX) {
+                movie.second.width[0] = 0;
+                movie.second.width[1] = movie.second.original_width;
+                std::cout << "LETTERBOX" << std::endl;
+                int p_y = 0;
+                int accumulator_pixel = 0;
+                //Why 10?
+                //because 8 controlpoints are enough I think
+                int pixel_offset = movie.second.original_width / 10;
+                int movie_middle = movie.second.original_height / 2;
+
+                while (p_y < movie_middle && accumulator_pixel < 1) {
+                    for (int i = 2; i < 10; i++) {
+                        Color pixel = GetImageColor(frame, pixel_offset*i, p_y);
+                        accumulator_pixel += ((int)pixel.r >> over_correction) + ((int)pixel.g >> over_correction) + ((int)pixel.b >> over_correction);
+                    }
+                    p_y++;
+                }
+                if (p_y < movie.second.height[0]) movie.second.height[0] = p_y; 
+
+                p_y = movie.second.original_height -1;
+                accumulator_pixel = 0;
+                while (p_y > movie_middle && accumulator_pixel < 1) {
+                    for (int i = 2; i < 10; i++) {
+                        Color pixel = GetImageColor(frame, pixel_offset*i, p_y);
+                        accumulator_pixel += ((int)pixel.r >> over_correction) + ((int)pixel.g >> over_correction) + ((int)pixel.b >> over_correction);
+                    }
+                    p_y--;
+                }
+                if (p_y > movie.second.height[1]) movie.second.height[1] = p_y; 
+
+                std::cout << movie.second.height[0] << " " << movie.second.height[1] << std::endl;
+                    
+            } else if (aspect_ratio_type == PILLARBOX) {
+                movie.second.height[0] = 0;
+                movie.second.height[1] = movie.second.original_height;
+                std::cout << "LETTERBOX" << std::endl;
+                int p_x = 0;
+                int accumulator_pixel = 0;
+                //Why 10?
+                //because 8 controlpoints are enough I think
+                int pixel_offset = movie.second.original_height / 10;
+                int movie_middle = movie.second.original_width / 2;
+
+                while (p_x < movie_middle && accumulator_pixel < 1) {
+                    for (int i = 2; i < 10; i++) {
+                        Color pixel = GetImageColor(frame, p_x, pixel_offset*i);
+                        accumulator_pixel += ((int)pixel.r >> over_correction) + ((int)pixel.g >> over_correction) + ((int)pixel.b >> over_correction);
+                    }
+                    p_x++;
+                }
+                if (p_x < movie.second.width[0]) movie.second.width[0] = p_x; 
+
+                p_x = movie.second.original_width -1;
+                accumulator_pixel = 0;
+                while (p_x > movie_middle && accumulator_pixel < 1) {
+                    for (int i = 2; i < 10; i++) {
+                        Color pixel = GetImageColor(frame, p_x, pixel_offset*i);
+                        
+                        accumulator_pixel += ((int)pixel.r >> over_correction) + ((int)pixel.g >> over_correction) + ((int)pixel.b >> over_correction);
+                    }
+                    p_x--;
+                }
+                if (p_x > movie.second.width[1]) movie.second.width[1] = p_x; 
+
+                std::cout << movie.second.width[0] << " " << movie.second.width[1] << std::endl;
+            } else if (aspect_ratio_type == FULLBOX) {
+                std::cout << "FULLBOX" << std::endl;
+            } else if (aspect_ratio_type == UNDEFINED) {
+                std::cout << "UNDEFINED" << std::endl;
+            }
         }
     }
 }
@@ -272,7 +386,7 @@ int main(int argc, char** argv)
     subtitle_thread.join();
     program_status.subtitle_thread_running = false;
     aspect_ratio_calculation_thread.join();
-
+/* 
     for (auto& movie : movies) {
         std::cout << movie.second.video_title << " " << movie.second.audio_track_count;
         for (auto& lang : movie.second.subtitle_langs) {
@@ -281,7 +395,7 @@ int main(int argc, char** argv)
         std::cout << std::endl;
     } 
     return 0;
-
+ */
 /*     Encoder encoder;
     encoder.store_video_paths(); */
     
