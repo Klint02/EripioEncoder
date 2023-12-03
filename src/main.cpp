@@ -5,7 +5,6 @@
 #include <vector>
 #include <thread>
 #include <algorithm>
-#include <format>
 #include "raylib.h"
 
 
@@ -138,12 +137,16 @@ inline Timestamp return_duration_seperated(int duration) {
 }
 
 //TODO: Take screenshots every five minutes to minimize aspect ratio misses for multi aspect ratio movies
-inline std::vector<Timestamp> create_timestamps(int duration, int screenshot_amount) {
+inline std::vector<Timestamp> create_timestamps(int duration) {
     std::vector<Timestamp> timestamps;
-    int duration_offset = duration / (screenshot_amount + 1);
-    int timestamp = 0;
-    for (int i = 0; i < screenshot_amount; i++) {
-        timestamp += duration_offset;
+
+    //Remove as many seconds of credits as possible while preserving usable movie frames
+    if (duration > (HOUR * 2)) {
+        duration = duration - MINUTE * 45;
+    } else if (duration > HOUR) {
+        duration = duration - MINUTE * 30;
+    } 
+    for (int timestamp = MINUTE * 5; timestamp < duration; timestamp += MINUTE * 5) {
         timestamps.push_back(return_duration_seperated(timestamp));
     }
     return timestamps;
@@ -162,29 +165,19 @@ void calculate_movie_aspect_ratios (std::unordered_map<std::string, Video_file>*
 
         std::cout << movie.second.original_width << "x" << movie.second.original_height << std::endl;
 
-        std::vector<Timestamp> timestamps;
-        if (duration < THIRTY_MINUTES) {
-            timestamps = create_timestamps(duration, 2);
-        } else if (duration < THIRTY_MINUTES) {
-            timestamps = create_timestamps(duration, 3);
-        } else if (duration < ONE_HOUR) {
-            timestamps = create_timestamps(duration, 4);
-        } else if (duration < TWO_HOURS) {
-            timestamps = create_timestamps(duration, 5);
-        } else if (duration > TWO_HOURS) {
-            timestamps = create_timestamps(duration, 6);
-        }
+        std::vector<Timestamp> timestamps = create_timestamps(duration);
 
         std::cout << movie.second.video_title << std::endl;
         int aspect_ratio_type = -1;
 
         for(int i = 0; i < (int)timestamps.size(); i++) {
-            Timestamp timestamp = timestamps.at(i); 
-            std::string arg = std::format("ffmpeg -ss {0}:{1}:{2} -i \"{3}\" -vframes 1 \"{4}.{5}.png\"", timestamp.hours, timestamp.minutes, timestamp.seconds, movie.second.path, movie.second.video_title, i);
-            std::cout << arg << std::endl;
-            cmd_exec(arg, "");
+            //Timestamp timestamp = timestamps.at(i); 
+            //std::string arg = "ffmpeg -hide_banner -loglevel error -ss " + std::to_string(timestamp.hours) + ":" + std::to_string(timestamp.minutes) + ":" + std::to_string(timestamp.seconds) + " -i \"" + movie.second.path +"\" -vframes 1 \"" + movie.second.video_title + "." + std::to_string(i) + ".png\"";
+            //Use only for debug 
+            //std::cout << arg << std::endl;
+            //cmd_exec(arg, "");
             //std::cout << movie.second.path.substr(0, movie.second.path.find_last_of(".")) << std::endl;
-            std::string movie_frame_path = std::format("{0}.{1}.png", movie.second.path.substr(0, movie.second.path.find_last_of(".")), i);  
+            std::string movie_frame_path = movie.second.path.substr(0, movie.second.path.find_last_of(".")) + "." + std::to_string(i) + ".png";  
             Image frame = LoadImage(movie_frame_path.c_str());
             //Color pixel = GetImageColor(frame, 4, 1079);
             //std::cout << "pixel is this color: " << (int)pixel.r << (int)pixel.g << (int)pixel.b << std::endl;
@@ -203,9 +196,7 @@ void calculate_movie_aspect_ratios (std::unordered_map<std::string, Video_file>*
             }
             if (!accumulator_pixel_t && !accumulator_pixel_b) {
                 aspect_ratio_type = LETTERBOX;
-            } else {
-                aspect_ratio_type = FULLBOX;
-            }
+            } 
 
             accumulator_pixel_t = 0;
             accumulator_pixel_b = 0;
@@ -221,6 +212,10 @@ void calculate_movie_aspect_ratios (std::unordered_map<std::string, Video_file>*
                 aspect_ratio_type = PILLARBOX;
             }
 
+            if (aspect_ratio_type != LETTERBOX && aspect_ratio_type != PILLARBOX) {
+                aspect_ratio_type = FULLBOX;
+            }
+
             if (aspect_ratio_type == LETTERBOX) {
                 movie.second.width[0] = 0;
                 movie.second.width[1] = movie.second.original_width;
@@ -228,7 +223,7 @@ void calculate_movie_aspect_ratios (std::unordered_map<std::string, Video_file>*
                 int p_y = 0;
                 int accumulator_pixel = 0;
                 //Why 10?
-                //because 8 controlpoints are enough I think
+                //because 8 controlpixels are enough I think
                 int pixel_offset = movie.second.original_width / 10;
                 int movie_middle = movie.second.original_height / 2;
 
@@ -257,7 +252,7 @@ void calculate_movie_aspect_ratios (std::unordered_map<std::string, Video_file>*
             } else if (aspect_ratio_type == PILLARBOX) {
                 movie.second.height[0] = 0;
                 movie.second.height[1] = movie.second.original_height;
-                std::cout << "LETTERBOX" << std::endl;
+                std::cout << "PILLARBOX" << std::endl;
                 int p_x = 0;
                 int accumulator_pixel = 0;
                 //Why 10?
@@ -289,11 +284,45 @@ void calculate_movie_aspect_ratios (std::unordered_map<std::string, Video_file>*
                 std::cout << movie.second.width[0] << " " << movie.second.width[1] << std::endl;
             } else if (aspect_ratio_type == FULLBOX) {
                 std::cout << "FULLBOX" << std::endl;
+                movie.second.width[0] =  0;
+                movie.second.width[1] = movie.second.original_width;
+                movie.second.height[0] = 0;
+                movie.second.height[1] =  movie.second.original_height;
             } else if (aspect_ratio_type == UNDEFINED) {
-                std::cout << "UNDEFINED" << std::endl;
+                //Should maybe use exceptions but this will do fine
+                std::cout << "[ERROR] UNDEFINED aspect ratio for " << std::endl;
             }
         }
     }
+}
+
+inline std::string create_ffmpeg_argument(Video_file movie, std::string video_codec, std::string constant_rate_factor, std::string path) {
+    
+    //TODO: Add audio channel counts to struct so streams can be mapped with the correct number of streams
+    //      Instead of -ac X it should be -ac:a:AUDIOSTREAM X, where X is the channel count from the struct
+    std::string audio_args = "";
+    for (int i = 0; i < movie.audio_track_count; i++) {
+        audio_args += "-c:a:" + std::to_string(i) + " eac3 -ac 6 ";
+    }
+
+    std::string video_crop_args = "-filter:v \"crop=" + std::to_string(movie.width[1] - movie.width[0]) +  ":" + std::to_string(movie.height[1] - movie.height[0]) +  ":" + std::to_string(movie.width[0]) + ":" + std::to_string(movie.height[0]) + "\"";
+    
+    std::string subtitle_metadata_args = "";
+    std::string subtitle_input_args = "";
+    std::string subtile_demap = "";
+
+    for (u_int32_t i = 0; i < movie.subtitle_langs.size(); i++) {
+        subtitle_metadata_args += " -map " + std::to_string(i+1) + ":s -metadata:s:s:" + std::to_string(i) + " language=" + movie.subtitle_langs[i];
+        subtitle_input_args += "-i \"" + path + "/" +  movie.video_title + "." + movie.subtitle_langs[i] + ".srt\" ";
+    }
+
+    if (subtitle_metadata_args.size() > 0) { 
+        subtitle_metadata_args += " -c:s copy";
+        subtile_demap = " -map -0:s ";
+    }
+
+    
+    return "ffmpeg -i \"" + movie.path + "\" " + subtitle_input_args +  " -map 0 -codec:v " + video_codec + " " + video_crop_args + " " + audio_args + subtile_demap + subtitle_metadata_args + " " + " -metadata title=\"" + movie.video_title + "\" \"" + path + "/0encoded/" + movie.video_title + ".mkv\"";
 }
 
 /*
@@ -371,52 +400,27 @@ int main(int argc, char** argv)
     } */
     //std::thread logger_thread (logger, &program_status);
 
-/*     std::cout << "[INFO] Starting subtitle conversion thread" << std::endl;
- */    std::thread subtitle_thread (convert_subtitles, &movies, &program_status, path);
+    std::cout << "[INFO] Starting subtitle conversion thread" << std::endl;
+    std::thread subtitle_thread (convert_subtitles, &movies, &program_status, path);
 
-/*     std::cout << "[INFO] Starting audio track counting thread" << std::endl;
- */    std::thread audio_track_thread (determine_audio_tracks, &movies, &program_status);
+    std::cout << "[INFO] Starting audio track counting thread" << std::endl;
+    std::thread audio_track_thread (determine_audio_tracks, &movies, &program_status);
 
-/*     std::cout << "[INFO] Starting audio track counting thread" << std::endl;
-*/     std::thread aspect_ratio_calculation_thread (calculate_movie_aspect_ratios, &movies, &program_status, path);
-
+    std::cout << "[INFO] Starting audio track counting thread" << std::endl;
+    std::thread aspect_ratio_calculation_thread (calculate_movie_aspect_ratios, &movies, &program_status, path);
+ 
 
     audio_track_thread.join();
     program_status.audio_track_thread_running = false;
     subtitle_thread.join();
     program_status.subtitle_thread_running = false;
     aspect_ratio_calculation_thread.join();
-/* 
+
+    
+
     for (auto& movie : movies) {
-        std::cout << movie.second.video_title << " " << movie.second.audio_track_count;
-        for (auto& lang : movie.second.subtitle_langs) {
-            std::cout << " " << lang;
-        }
-        std::cout << std::endl;
+        std::cout << create_ffmpeg_argument(movie.second, "libx265", "-crf 21", path) << std::endl;
     } 
     return 0;
- */
-/*     Encoder encoder;
-    encoder.store_video_paths(); */
-    
-    //encoder.find_resolution("/home/klint/Git/EripioEncoder/testData/2.40:1/img003.png");
-    /*
-    std::string current_path = fs::current_path();
-    for (const auto& entry : fs::directory_iterator(current_path)) 
-    {
-        encoder.run(entry);
-        std::cout << entry << std::endl;
-        encoder.video.subtitle_count = 2;
-        //encoder.
-    }
-*/
-/*
-    FILE *p = popen("ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of default=nw=1:nk=1" , "r");
-
-    if (p != NULL) {
-        std::cout << "running" << std::endl;
-    }
-*/
-    //pclose(p);
 }
 
