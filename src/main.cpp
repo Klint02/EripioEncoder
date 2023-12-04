@@ -29,6 +29,7 @@ struct Video_file {
     std::vector<std::string> subtitle_langs;
 
     int audio_track_count;
+    std::vector<u_int16_t> audio_channel_count;
 
     int original_height;
     int original_width;
@@ -91,25 +92,37 @@ void determine_audio_tracks(std::unordered_map<std::string, Video_file>* movies,
         std::string out = cmd_exec("ffprobe -v error -select_streams a -show_entries stream=codec_type -of default=nw=1:nk=1 \"" + movie.second.path + "\" | uniq -c", "");
         out.erase(remove_if(out.begin(), out.end(), isspace), out.end());
         movie.second.audio_track_count = stoi(out.substr(0,1));
+
+        out = cmd_exec("ffprobe -v error -select_streams a -show_entries stream=channels -of default=nw=1:nk=1 \"" + movie.second.path + "\"", "");
+        std::cout << movie.second.video_title << std::endl << out << std::endl;
+        int substring_start = 0;
+        for(u_int32_t i = 0; i < out.length(); i++) {
+            if (out[i] == '\n') {
+                //std::cout << out.substr(substring_start, i - substring_start) << std::endl;
+                movie.second.audio_channel_count.push_back(stoi(out.substr(substring_start, i - substring_start)));
+                //newline_pos.push_back(i);
+                substring_start = i;
+            }
+        }
+
+
         //std::cout << movie.second.audio_track_count << movie.second.video_title << std::endl;
         program_status->audio_track_progress++;
     }
 }
 
-/* 
-1. convert movies
-2. assign subs to movie struct
-    
-*/
+
 void convert_subtitles(std::unordered_map<std::string, Video_file>* movies, Program_status *program_status, std::string folder_path) {
-/*    for (auto& movie : *movies) {
-        //cmd_exec("subtitleedit /convert \"" + movie.second.path + "\" subrip", "v");
-    } */
+    for (auto& movie : *movies) {
+        cmd_exec("subtitleedit /convert \"" + movie.second.path + "\" subrip", "v");
+    }
 
     std::string subtitle_filename = "";
     for (const auto& entry : fs::directory_iterator(folder_path)) {
         if (entry.path().extension() == ".srt") {
             subtitle_filename = entry.path().filename().string();
+            cmd_exec("sed -i 's/|/I/gI' \"" + entry.path().string() + "\"", "");
+            cmd_exec("sed -i 's/-1/-I/gI' \"" + entry.path().string() + "\"", "");
             int substr_lang_position_start = subtitle_filename.find_first_of(".") + 1;
             
             movies->at(subtitle_filename.substr(0, substr_lang_position_start) + "mkv").subtitle_langs.push_back(subtitle_filename.substr(substr_lang_position_start, 3));
@@ -136,7 +149,6 @@ inline Timestamp return_duration_seperated(int duration) {
  */    return video_duration;
 }
 
-//TODO: Take screenshots every five minutes to minimize aspect ratio misses for multi aspect ratio movies
 inline std::vector<Timestamp> create_timestamps(int duration) {
     std::vector<Timestamp> timestamps;
 
@@ -171,16 +183,14 @@ void calculate_movie_aspect_ratios (std::unordered_map<std::string, Video_file>*
         int aspect_ratio_type = -1;
 
         for(int i = 0; i < (int)timestamps.size(); i++) {
-            //Timestamp timestamp = timestamps.at(i); 
-            //std::string arg = "ffmpeg -hide_banner -loglevel error -ss " + std::to_string(timestamp.hours) + ":" + std::to_string(timestamp.minutes) + ":" + std::to_string(timestamp.seconds) + " -i \"" + movie.second.path +"\" -vframes 1 \"" + movie.second.video_title + "." + std::to_string(i) + ".png\"";
+            Timestamp timestamp = timestamps.at(i); 
+            std::string arg = "ffmpeg -hide_banner -loglevel error -ss " + std::to_string(timestamp.hours) + ":" + std::to_string(timestamp.minutes) + ":" + std::to_string(timestamp.seconds) + " -i \"" + movie.second.path +"\" -vframes 1 \"" + movie.second.video_title + "." + std::to_string(i) + ".png\"";
             //Use only for debug 
             //std::cout << arg << std::endl;
-            //cmd_exec(arg, "");
+            cmd_exec(arg, "");
             //std::cout << movie.second.path.substr(0, movie.second.path.find_last_of(".")) << std::endl;
             std::string movie_frame_path = movie.second.path.substr(0, movie.second.path.find_last_of(".")) + "." + std::to_string(i) + ".png";  
             Image frame = LoadImage(movie_frame_path.c_str());
-            //Color pixel = GetImageColor(frame, 4, 1079);
-            //std::cout << "pixel is this color: " << (int)pixel.r << (int)pixel.g << (int)pixel.b << std::endl;
             
             //Adjust to make it more or less discriminative of black pixels 
             int over_correction = 2;
@@ -298,11 +308,11 @@ void calculate_movie_aspect_ratios (std::unordered_map<std::string, Video_file>*
 
 inline std::string create_ffmpeg_argument(Video_file movie, std::string video_codec, std::string constant_rate_factor, std::string path) {
     
-    //TODO: Add audio channel counts to struct so streams can be mapped with the correct number of streams
-    //      Instead of -ac X it should be -ac:a:AUDIOSTREAM X, where X is the channel count from the struct
     std::string audio_args = "";
     for (int i = 0; i < movie.audio_track_count; i++) {
-        audio_args += "-c:a:" + std::to_string(i) + " eac3 -ac 6 ";
+
+        audio_args += "-c:a:" + std::to_string(i) + " eac3 ";
+        if (movie.audio_channel_count[i] > 6) audio_args += "-ac:a:" + std::to_string(i) + " 6 ";
     }
 
     std::string video_crop_args = "-filter:v \"crop=" + std::to_string(movie.width[1] - movie.width[0]) +  ":" + std::to_string(movie.height[1] - movie.height[0]) +  ":" + std::to_string(movie.width[0]) + ":" + std::to_string(movie.height[0]) + "\"";
@@ -406,7 +416,7 @@ int main(int argc, char** argv)
     std::cout << "[INFO] Starting audio track counting thread" << std::endl;
     std::thread audio_track_thread (determine_audio_tracks, &movies, &program_status);
 
-    std::cout << "[INFO] Starting audio track counting thread" << std::endl;
+    std::cout << "[INFO] Starting aspect ratio calculation thread" << std::endl;
     std::thread aspect_ratio_calculation_thread (calculate_movie_aspect_ratios, &movies, &program_status, path);
  
 
