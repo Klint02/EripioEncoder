@@ -1,7 +1,7 @@
 #include <iostream>
+#include <fstream>
 #include <filesystem>
-#include <array>
-#include <unordered_map>
+#include <map>
 #include <vector>
 #include <thread>
 #include <algorithm>
@@ -28,7 +28,6 @@ struct Video_file {
 
     std::vector<std::string> subtitle_langs;
 
-    int audio_track_count;
     std::vector<u_int16_t> audio_channel_count;
 
     int original_height;
@@ -37,6 +36,25 @@ struct Video_file {
     int width[2] = {INT32_MAX, -1};
     int height[2] = {INT32_MAX, -1};;
     
+    std::string to_string() 
+    {
+        std::string sub_langs = "";
+        std::string audio_tracks = "";
+        std::string delimiter = "";
+        
+        for (auto& lang : subtitle_langs) {
+            sub_langs += delimiter + lang;
+            delimiter = ",";
+        }
+
+        delimiter = "";
+        for (auto& track : audio_channel_count) {
+            audio_tracks += delimiter + std::to_string(track);
+            delimiter = ",";
+        }
+
+        return path + "|" + video_title + "|" + sub_langs + "|" + audio_tracks + "|" + std::to_string(original_height) + "|" + std::to_string(original_width) + "|" + std::to_string(width[0]) + "," + std::to_string(width[1]) + "|" + std::to_string(height[0]) + "," + std::to_string(height[1]);
+    }
 };
 
 enum { LETTERBOX, PILLARBOX , FULLBOX, UNDEFINED = -1 };
@@ -52,6 +70,8 @@ struct Timestamp {
     int minutes = 0;
     int seconds = 0;
 };
+
+
 
 bool contains(int len, char** arr, std::string str1) {
     for (int i = 0; i < len; i++) {
@@ -86,14 +106,15 @@ std::string cmd_exec(std::string arg, std::string flag) {
 }
 
 
-void determine_audio_tracks(std::unordered_map<std::string, Video_file>* movies, Program_status *program_status) {
+void determine_audio_tracks(std::map<std::string, Video_file>* movies, Program_status *program_status) {
     for (auto& movie : *movies) {
         program_status->audio_track_thread_running = true;
+        /*
         std::string out = cmd_exec("ffprobe -v error -select_streams a -show_entries stream=codec_type -of default=nw=1:nk=1 \"" + movie.second.path + "\" | uniq -c", "");
         out.erase(remove_if(out.begin(), out.end(), isspace), out.end());
         movie.second.audio_track_count = stoi(out.substr(0,1));
-
-        out = cmd_exec("ffprobe -v error -select_streams a -show_entries stream=channels -of default=nw=1:nk=1 \"" + movie.second.path + "\"", "");
+*/
+        std::string out = cmd_exec("ffprobe -v error -select_streams a -show_entries stream=channels -of default=nw=1:nk=1 \"" + movie.second.path + "\"", "");
         std::cout << movie.second.video_title << std::endl << out << std::endl;
         int substring_start = 0;
         for(u_int32_t i = 0; i < out.length(); i++) {
@@ -112,7 +133,7 @@ void determine_audio_tracks(std::unordered_map<std::string, Video_file>* movies,
 }
 
 
-void convert_subtitles(std::unordered_map<std::string, Video_file>* movies, Program_status *program_status, std::string folder_path) {
+void convert_subtitles(std::map<std::string, Video_file>* movies, Program_status *program_status, std::string folder_path) {
     for (auto& movie : *movies) {
         cmd_exec("subtitleedit /convert \"" + movie.second.path + "\" subrip", "v");
     }
@@ -164,7 +185,8 @@ inline std::vector<Timestamp> create_timestamps(int duration) {
     return timestamps;
 }
 
-void calculate_movie_aspect_ratios (std::unordered_map<std::string, Video_file>* movies, Program_status *program_status, std::string folder_path) {
+//TODO: Find a way to sort the corrupted frames from the good (lego movie for testing)
+void calculate_movie_aspect_ratios (std::map<std::string, Video_file>* movies, Program_status *program_status, std::string folder_path) {
     for (auto& movie : *movies) {
         std::string aspect_ratios = cmd_exec("ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of default=nw=1:nk=1 \"" + movie.second.path + "\"", "");
         //output must be 
@@ -180,141 +202,105 @@ void calculate_movie_aspect_ratios (std::unordered_map<std::string, Video_file>*
         std::vector<Timestamp> timestamps = create_timestamps(duration);
 
         std::cout << movie.second.video_title << std::endl;
-        int aspect_ratio_type = -1;
+        //int aspect_ratio_type = -1;
 
         for(int i = 0; i < (int)timestamps.size(); i++) {
             Timestamp timestamp = timestamps.at(i); 
-            std::string arg = "ffmpeg -hide_banner -loglevel error -ss " + std::to_string(timestamp.hours) + ":" + std::to_string(timestamp.minutes) + ":" + std::to_string(timestamp.seconds) + " -i \"" + movie.second.path +"\" -vframes 1 \"" + movie.second.video_title + "." + std::to_string(i) + ".png\"";
+            std::string arg = "ffmpeg -y -err_detect aggressive -fflags discardcorrupt -hide_banner -loglevel error -ss " + std::to_string(timestamp.hours) + ":" + std::to_string(timestamp.minutes) + ":" + std::to_string(timestamp.seconds) + " -i \"" + movie.second.path +"\" -vframes 1 \"" + movie.second.video_title + "." + std::to_string(i) + ".png\"";
             //Use only for debug 
             //std::cout << arg << std::endl;
             cmd_exec(arg, "");
-            //std::cout << movie.second.path.substr(0, movie.second.path.find_last_of(".")) << std::endl;
             std::string movie_frame_path = movie.second.path.substr(0, movie.second.path.find_last_of(".")) + "." + std::to_string(i) + ".png";  
             Image frame = LoadImage(movie_frame_path.c_str());
             
             //Adjust to make it more or less discriminative of black pixels 
             int over_correction = 2;
 
-            int accumulator_pixel_t = 0;
-            int accumulator_pixel_b = 0;
-            for (int p_x = 0; p_x < movie.second.original_width; p_x++) {
-                Color pixel_one = GetImageColor(frame, p_x, 0);
-                Color pixel_two = GetImageColor(frame, p_x, movie.second.original_height - 1);
-                accumulator_pixel_t += (int)pixel_one.r + (int)pixel_one.g + (int)pixel_one.b;
-                accumulator_pixel_b += (int)pixel_two.r + (int)pixel_two.g + (int)pixel_two.b;
+            //TODO: make this smaller?
+            int p_y = 0;
+            int accumulator_pixel = 0;
+            //Why 10?
+            //because 8 controlpixels are enough I think
+            int pixel_offset = movie.second.original_width / 10;
+            int movie_middle = movie.second.original_height / 2;
 
-            }
-            if (!accumulator_pixel_t && !accumulator_pixel_b) {
-                aspect_ratio_type = LETTERBOX;
-            } 
-
-            accumulator_pixel_t = 0;
-            accumulator_pixel_b = 0;
-            for (int p_y = 0; p_y < movie.second.original_height; p_y++) {
-                Color pixel_one = GetImageColor(frame, 0, p_y);
-                Color pixel_two = GetImageColor(frame, movie.second.original_width -1, p_y);
-                accumulator_pixel_t += (int)pixel_one.r + (int)pixel_one.g + (int)pixel_one.b;
-                accumulator_pixel_b += (int)pixel_two.r + (int)pixel_two.g + (int)pixel_two.b;
-
-            }
-
-            if (!accumulator_pixel_t && !accumulator_pixel_b) {
-                aspect_ratio_type = PILLARBOX;
-            }
-
-            if (aspect_ratio_type != LETTERBOX && aspect_ratio_type != PILLARBOX) {
-                aspect_ratio_type = FULLBOX;
-            }
-
-            if (aspect_ratio_type == LETTERBOX) {
-                movie.second.width[0] = 0;
-                movie.second.width[1] = movie.second.original_width;
-                std::cout << "LETTERBOX" << std::endl;
-                int p_y = 0;
-                int accumulator_pixel = 0;
-                //Why 10?
-                //because 8 controlpixels are enough I think
-                int pixel_offset = movie.second.original_width / 10;
-                int movie_middle = movie.second.original_height / 2;
-
-                while (p_y < movie_middle && accumulator_pixel < 1) {
-                    for (int i = 2; i < 10; i++) {
-                        Color pixel = GetImageColor(frame, pixel_offset*i, p_y);
-                        accumulator_pixel += ((int)pixel.r >> over_correction) + ((int)pixel.g >> over_correction) + ((int)pixel.b >> over_correction);
-                    }
-                    p_y++;
+            while (p_y < movie_middle && accumulator_pixel < 1) {
+                for (int i = 2; i < 10; i++) {
+                    Color pixel = GetImageColor(frame, pixel_offset*i, p_y);
+                    accumulator_pixel += ((int)pixel.r >> over_correction) + ((int)pixel.g >> over_correction) + ((int)pixel.b >> over_correction);
                 }
-                if (p_y < movie.second.height[0]) movie.second.height[0] = p_y; 
+                p_y++;
+            }
+            if (p_y < movie.second.height[0] && (p_y != 1 && p_y + 2 != movie.second.original_height)) movie.second.height[0] = p_y; 
 
-                p_y = movie.second.original_height -1;
-                accumulator_pixel = 0;
-                while (p_y > movie_middle && accumulator_pixel < 1) {
-                    for (int i = 2; i < 10; i++) {
-                        Color pixel = GetImageColor(frame, pixel_offset*i, p_y);
-                        accumulator_pixel += ((int)pixel.r >> over_correction) + ((int)pixel.g >> over_correction) + ((int)pixel.b >> over_correction);
-                    }
-                    p_y--;
+            p_y = movie.second.original_height -1;
+            accumulator_pixel = 0;
+            while (p_y > movie_middle && accumulator_pixel < 1) {
+                for (int i = 2; i < 10; i++) {
+                    Color pixel = GetImageColor(frame, pixel_offset*i, p_y);
+                    accumulator_pixel += ((int)pixel.r >> over_correction) + ((int)pixel.g >> over_correction) + ((int)pixel.b >> over_correction);
                 }
-                if (p_y > movie.second.height[1]) movie.second.height[1] = p_y; 
+                p_y--;
+            }
+            if (p_y > movie.second.height[1] && (p_y != 1 && p_y + 2 != movie.second.original_height)) movie.second.height[1] = p_y; 
 
-                std::cout << movie.second.height[0] << " " << movie.second.height[1] << std::endl;
+            int p_x = 0;
+            accumulator_pixel = 0;
+            //Why 10?
+            //because 8 controlpoints are enough I think
+            pixel_offset = movie.second.original_height / 10;
+            movie_middle = movie.second.original_width / 2;
+
+            while (p_x < movie_middle && accumulator_pixel < 1) {
+                for (int i = 2; i < 10; i++) {
+                    Color pixel = GetImageColor(frame, p_x, pixel_offset*i);
+                    accumulator_pixel += ((int)pixel.r >> over_correction) + ((int)pixel.g >> over_correction) + ((int)pixel.b >> over_correction);
+                }
+                p_x++;
+            }
+            if (p_x < movie.second.width[0] && (p_x != 1 && p_x + 2 != movie.second.original_width)) movie.second.width[0] = p_x; 
+
+            p_x = movie.second.original_width -1;
+            accumulator_pixel = 0;
+            while (p_x > movie_middle && accumulator_pixel < 1) {
+                for (int i = 2; i < 10; i++) {
+                    Color pixel = GetImageColor(frame, p_x, pixel_offset*i);
                     
-            } else if (aspect_ratio_type == PILLARBOX) {
-                movie.second.height[0] = 0;
-                movie.second.height[1] = movie.second.original_height;
-                std::cout << "PILLARBOX" << std::endl;
-                int p_x = 0;
-                int accumulator_pixel = 0;
-                //Why 10?
-                //because 8 controlpoints are enough I think
-                int pixel_offset = movie.second.original_height / 10;
-                int movie_middle = movie.second.original_width / 2;
-
-                while (p_x < movie_middle && accumulator_pixel < 1) {
-                    for (int i = 2; i < 10; i++) {
-                        Color pixel = GetImageColor(frame, p_x, pixel_offset*i);
-                        accumulator_pixel += ((int)pixel.r >> over_correction) + ((int)pixel.g >> over_correction) + ((int)pixel.b >> over_correction);
-                    }
-                    p_x++;
+                    accumulator_pixel += ((int)pixel.r >> over_correction) + ((int)pixel.g >> over_correction) + ((int)pixel.b >> over_correction);
                 }
-                if (p_x < movie.second.width[0]) movie.second.width[0] = p_x; 
-
-                p_x = movie.second.original_width -1;
-                accumulator_pixel = 0;
-                while (p_x > movie_middle && accumulator_pixel < 1) {
-                    for (int i = 2; i < 10; i++) {
-                        Color pixel = GetImageColor(frame, p_x, pixel_offset*i);
-                        
-                        accumulator_pixel += ((int)pixel.r >> over_correction) + ((int)pixel.g >> over_correction) + ((int)pixel.b >> over_correction);
-                    }
-                    p_x--;
-                }
-                if (p_x > movie.second.width[1]) movie.second.width[1] = p_x; 
-
-                std::cout << movie.second.width[0] << " " << movie.second.width[1] << std::endl;
-            } else if (aspect_ratio_type == FULLBOX) {
-                std::cout << "FULLBOX" << std::endl;
-                movie.second.width[0] =  0;
-                movie.second.width[1] = movie.second.original_width;
-                movie.second.height[0] = 0;
-                movie.second.height[1] =  movie.second.original_height;
-            } else if (aspect_ratio_type == UNDEFINED) {
-                //Should maybe use exceptions but this will do fine
-                std::cout << "[ERROR] UNDEFINED aspect ratio for " << std::endl;
+                p_x--;
             }
+            if (p_x > movie.second.width[1] && (p_x != 1 && p_x + 2 != movie.second.original_width)) movie.second.width[1] = p_x; 
+            
+            //if black bars were not found at all, the remaining width and heights are set. 
+            //must be done per frame and not at the end, as movies like the conjuring has singular scenes where there are black bars all around
+            if (movie.second.width[0] == INT32_MAX) movie.second.width[0] = 0;
+            if (movie.second.width[1] == -1) movie.second.width[1] = movie.second.original_width;
+            if (movie.second.height[0] == INT32_MAX) movie.second.height[0] = 0;
+            if (movie.second.height[1] == -1) movie.second.height[1] = movie.second.original_height;
+            
+            std::cout << "width calculation " << movie.second.width[0] << " " << movie.second.width[1] << std::endl;
+            std::cout << "height calculation " << movie.second.height[0] << " " << movie.second.height[1] << std::endl;
+            //Discards the current frame from memory to prevent memory leaks
+            UnloadImage(frame);
         }
+
+
+
+
+        std::cout << "width calculation " << movie.second.width[0] << " " << movie.second.width[1] << std::endl;
+        std::cout << "height calculation " << movie.second.height[0] << " " << movie.second.height[1] << std::endl;
     }
 }
 
 inline std::string create_ffmpeg_argument(Video_file movie, std::string video_codec, std::string constant_rate_factor, std::string path) {
     
     std::string audio_args = "";
-    for (int i = 0; i < movie.audio_track_count; i++) {
+    for (u_int32_t i = 0; i < movie.audio_channel_count.size(); i++) {
 
         audio_args += "-c:a:" + std::to_string(i) + " eac3 ";
         if (movie.audio_channel_count[i] > 6) audio_args += "-ac:a:" + std::to_string(i) + " 6 ";
     }
-
     std::string video_crop_args = "-filter:v \"crop=" + std::to_string(movie.width[1] - movie.width[0]) +  ":" + std::to_string(movie.height[1] - movie.height[0]) +  ":" + std::to_string(movie.width[0]) + ":" + std::to_string(movie.height[0]) + "\"";
     
     std::string subtitle_metadata_args = "";
@@ -355,8 +341,9 @@ void logger(Program_status *program_status) {
 
 int main(int argc, char** argv)
 {
+    bool load_from_file = false;
     Program_status program_status;
-    std::unordered_map<std::string, Video_file> movies;
+    std::map<std::string, Video_file> movies;
 
     std::string path = fs::current_path();
     
@@ -382,54 +369,161 @@ int main(int argc, char** argv)
                 }
             }
         }
-        if (contains(argc, argv, "-a", "--async")) {
-            std::cout << "Not Implemented" << std::endl;
-            return 0;
+
+        if (contains(argc, argv, "-l", "--load")) {
+            load_from_file = true;   
         }
 
     }
 
-    std::cout << "[INFO] Determining audio tracks for movies" << std::endl;
-    for (const auto& entry : fs::directory_iterator(path)) 
-    {
-        if (entry.path().extension() == ".mkv" || entry.path().extension() == ".mp4") {
+    if (!load_from_file) {
+        std::cout << "[INFO] Determining audio tracks for movies" << std::endl;
+        for (const auto& entry : fs::directory_iterator(path)) 
+        {
+            if (entry.path().extension() == ".mkv" || entry.path().extension() == ".mp4") {
 
-            Video_file movie;
-            movie.path = entry.path().string();
-            std::string temp_title = entry.path().filename().string();
-            movie.video_title = temp_title.substr(0, temp_title.find_last_of("."));
-            movies.insert({entry.path().filename(), movie});
-            program_status.movie_count = movies.size();
+                Video_file movie;
+                movie.path = entry.path().string();
+                std::string temp_title = entry.path().filename().string();
+                movie.video_title = temp_title.substr(0, temp_title.find_last_of("."));
+                movies.insert({entry.path().filename(), movie});
+                program_status.movie_count = movies.size();
 
+            }
+        }
+        
+        //TODO: Create logging screen with ncurses
+        //std::thread logger_thread (logger, &program_status);
+        std::cout << "[INFO] Starting subtitle conversion" << std::endl;
+        std::thread convert_subtitles_thread (convert_subtitles, &movies, &program_status, path);
+
+        std::cout << "[INFO] Starting audio track counting thread" << std::endl;
+        std::thread audio_track_thread (determine_audio_tracks, &movies, &program_status);
+
+        std::cout << "[INFO] Starting aspect ratio calculation thread" << std::endl;
+        std::thread aspect_ratio_calculation_thread (calculate_movie_aspect_ratios, &movies, &program_status, path);
+    
+        convert_subtitles_thread.join();
+        audio_track_thread.join();
+        aspect_ratio_calculation_thread.join();
+
+        std::cout << path << std::endl;
+        std::ofstream config_file;
+        //open with truncation so old movie config gets removed
+        config_file.open(path + "/movies.txt", std::ios::trunc);
+        
+
+
+        for (auto& movie : movies) {
+            config_file << movie.second.to_string() << std::endl;
+        } 
+
+        config_file.close();
+    } else {
+        std::string line;
+        std::ifstream config_file (path + "/movies.txt");
+        if (config_file.is_open()) {
+            while (getline(config_file, line)) {
+                std::string movie_key = "";
+                Video_file movie;
+
+                int substring_start = 0;
+                int subsubstring_start = 0;
+
+                int field_index = 0;
+
+                for(u_int32_t i = 0; i < line.length(); i++) {
+                    
+
+                    if (line[i] == '|' || i == line.length() - 1) {
+                        int delimiter;
+                        std::string struct_field = "";
+                        //Stupid fix because height was missing a char
+                        if (i == line.length() - 1) {
+                            struct_field = line.substr(substring_start);
+                        } else {
+                            struct_field = line.substr(substring_start, i - substring_start);
+                            substring_start = i + 1;
+
+                        }
+
+                        switch (field_index) {
+                            case 0:
+                            std::cout << field_index << std::endl;
+                                movie_key = struct_field;
+                                movie.path = struct_field;
+                                movies.insert({struct_field, movie});
+
+                                break;
+                            case 1:
+                                movies.at(movie_key).video_title = struct_field;
+                                break;
+                            case 2:
+                                subsubstring_start = 0;
+                                if (std::string::npos != struct_field.find(',')) {
+                                    for (u_int32_t j = 0; j < struct_field.length(); j++) {
+                                        if (struct_field[j] == ',') {
+                                            movies.at(movie_key).subtitle_langs.push_back(struct_field.substr(subsubstring_start, j - subsubstring_start));
+                                            subsubstring_start = j;
+                                        }
+                                        if (j == struct_field.length() - 1) {
+                                            movies.at(movie_key).subtitle_langs.push_back(struct_field.substr(subsubstring_start + 1));
+                                        }
+                                    }
+                                } else {
+                                    movies.at(movie_key).subtitle_langs.push_back(struct_field);
+                                }
+                                break;
+                            case 3:
+                                subsubstring_start = 0;
+                                if (std::string::npos != struct_field.find(',')) {
+                                    for (u_int32_t j = 0; j < struct_field.length(); j++) {
+                                        if (struct_field[j] == ',') {
+                                            movies.at(movie_key).audio_channel_count.push_back(stoi(struct_field.substr(subsubstring_start, j - subsubstring_start)));
+                                            subsubstring_start = j;
+                                        }
+                                        if (j == struct_field.length() - 1) {
+                                            movies.at(movie_key).audio_channel_count.push_back(stoi(struct_field.substr(subsubstring_start + 1)));
+                                        }
+                                    }
+                                } else {
+                                    movies.at(movie_key).audio_channel_count.push_back(stoi(struct_field));
+                                }
+                                break;
+                            case 4:
+                                movies.at(movie_key).original_height = 18000;
+                                std::cout << stoi(struct_field) << std::endl;
+                                break;
+                            case 5: 
+                                movies.at(movie_key).original_width = stoi(struct_field);
+                                break;
+                            case 6: 
+                                delimiter = struct_field.find_first_of(',');
+                                movies.at(movie_key).width[0] = stoi(struct_field.substr(0,delimiter));
+                                movies.at(movie_key).width[1] = stoi(struct_field.substr(delimiter + 1));
+                                break;
+                            case 7:
+                                delimiter = struct_field.find_first_of(',');
+                                movies.at(movie_key).height[0] = stoi(struct_field.substr(0,delimiter));
+                                movies.at(movie_key).height[1] = stoi(struct_field.substr(delimiter + 1));
+                                break;
+                        }
+
+                        field_index++;
+                    }
+                }
+            }
         }
     }
     
-/*     for (auto& movie : movies) {
-        std::cout << movie.second.video_title << " " << movie.second.audio_track_count << std::endl;
-        //cmd_exec("subtitleedit /convert \"" + movie + "\" subrip");
-    } */
-    //std::thread logger_thread (logger, &program_status);
 
-    std::cout << "[INFO] Starting subtitle conversion thread" << std::endl;
-    std::thread subtitle_thread (convert_subtitles, &movies, &program_status, path);
-
-    std::cout << "[INFO] Starting audio track counting thread" << std::endl;
-    std::thread audio_track_thread (determine_audio_tracks, &movies, &program_status);
-
-    std::cout << "[INFO] Starting aspect ratio calculation thread" << std::endl;
-    std::thread aspect_ratio_calculation_thread (calculate_movie_aspect_ratios, &movies, &program_status, path);
- 
-
-    audio_track_thread.join();
-    program_status.audio_track_thread_running = false;
-    subtitle_thread.join();
-    program_status.subtitle_thread_running = false;
-    aspect_ratio_calculation_thread.join();
-
+    fs::directory_entry entry{path + "/0encoded"};
+    if (!entry.exists()) {
+        fs::create_directory(path + "/0encoded");
+    }
     
-
     for (auto& movie : movies) {
-        std::cout << create_ffmpeg_argument(movie.second, "libx265", "-crf 21", path) << std::endl;
+        cmd_exec(create_ffmpeg_argument(movie.second, "libx265", "-crf 21", path), "-v");
     } 
     return 0;
 }
