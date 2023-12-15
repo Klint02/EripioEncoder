@@ -10,7 +10,6 @@
 
 namespace fs = std::filesystem;
 
-//#include "encoder.cpp"
 struct Program_status {
     int movie_count = 0;
     int subtitle_tack_progress = 0;
@@ -318,7 +317,7 @@ inline std::string create_ffmpeg_argument(Video_file movie, std::string video_co
     }
 
     
-    return "ffmpeg -i \"" + movie.path + "\" " + subtitle_input_args +  " -map 0 -codec:v " + video_codec + " " + video_crop_args + " " + audio_args + subtile_demap + subtitle_metadata_args + " " + " -metadata title=\"" + movie.video_title + "\" \"" + path + "/0encoded/" + movie.video_title + ".mkv\"";
+    return "ffmpeg -i \"" + movie.path + "\" " + subtitle_input_args +  " -map 0 -codec:v " + video_codec + " " + constant_rate_factor + " " + video_crop_args + " " + audio_args + subtile_demap + subtitle_metadata_args + " " + " -metadata title=\"" + movie.video_title + "\" \"" + path + "/0encoded/" + movie.video_title + ".mkv\"";
 }
 
 /*
@@ -523,7 +522,8 @@ int main(int argc, char** argv)
     }
     
     for (auto& movie : movies) {
-        cmd_exec(create_ffmpeg_argument(movie.second, "libx265", "-crf 21", path), "-v");
+        std::cout << create_ffmpeg_argument(movie.second, "libx265", "-crf 21", path) << std::endl;
+        //cmd_exec(create_ffmpeg_argument(movie.second, "libx265", "-crf 21", path), "-v");
     } 
     return 0;
 }
