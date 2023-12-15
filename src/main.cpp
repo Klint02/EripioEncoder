@@ -213,7 +213,8 @@ void calculate_movie_aspect_ratios (std::map<std::string, Video_file>* movies, P
             Image frame = LoadImage(movie_frame_path.c_str());
             
             //Adjust to make it more or less discriminative of black pixels 
-            int over_correction = 2;
+            //TODO: turn this into an argument for the program
+            int over_correction = 3;
 
             //TODO: make this smaller?
             int p_y = 0;
@@ -349,9 +350,11 @@ int main(int argc, char** argv)
     if (contains(argc, argv, "-h", "--help")) {
         std::cout 
         << "Welcome to the encoder \n" 
-        << "    -p or --path \t Specify path for encoding \n"
-        << "    -h or --help \t This message"
+        << "    -h or --help \t This message \n\n"
+        << "    -p or --path \t Specify directory for encoding \n"
+        << "    -l or --load \t Load config from a previous run \n"
         << std::endl;
+        return 0;
     } else {
         if  (contains(argc, argv, "-p", "--path")) {
             for (int i = 0; i < argc; i++) {
@@ -522,8 +525,8 @@ int main(int argc, char** argv)
     }
     
     for (auto& movie : movies) {
-        std::cout << create_ffmpeg_argument(movie.second, "libx265", "-crf 21", path) << std::endl;
-        //cmd_exec(create_ffmpeg_argument(movie.second, "libx265", "-crf 21", path), "-v");
+        //TODO: Fetch argument two and three from argv
+        cmd_exec(create_ffmpeg_argument(movie.second, "libx265", "-crf 21", path), "-v");
     } 
     return 0;
 }
