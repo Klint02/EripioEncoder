@@ -4,7 +4,6 @@
 #include <map>
 #include <vector>
 #include <thread>
-#include <algorithm>
 #include "raylib.h"
 
 
@@ -108,11 +107,7 @@ std::string cmd_exec(std::string arg, std::string flag) {
 void determine_audio_tracks(std::map<std::string, Video_file>* movies, Program_status *program_status) {
     for (auto& movie : *movies) {
         program_status->audio_track_thread_running = true;
-        /*
-        std::string out = cmd_exec("ffprobe -v error -select_streams a -show_entries stream=codec_type -of default=nw=1:nk=1 \"" + movie.second.path + "\" | uniq -c", "");
-        out.erase(remove_if(out.begin(), out.end(), isspace), out.end());
-        movie.second.audio_track_count = stoi(out.substr(0,1));
-*/
+
         std::string out = cmd_exec("ffprobe -v error -select_streams a -show_entries stream=channels -of default=nw=1:nk=1 \"" + movie.second.path + "\"", "");
         std::cout << movie.second.video_title << std::endl << out << std::endl;
         int substring_start = 0;
@@ -214,7 +209,7 @@ void calculate_movie_aspect_ratios (std::map<std::string, Video_file>* movies, P
             
             //Adjust to make it more or less discriminative of black pixels 
             //TODO: turn this into an argument for the program
-            int over_correction = 3;
+            int over_correction = 2;
 
             //TODO: make this smaller?
             int p_y = 0;
@@ -342,6 +337,7 @@ void logger(Program_status *program_status) {
 int main(int argc, char** argv)
 {
     bool load_from_file = false;
+    bool scan_only = false;
     Program_status program_status;
     std::map<std::string, Video_file> movies;
 
@@ -353,6 +349,7 @@ int main(int argc, char** argv)
         << "    -h or --help \t This message \n\n"
         << "    -p or --path \t Specify directory for encoding \n"
         << "    -l or --load \t Load config from a previous run \n"
+        << "    -s or --scan \t Create config file without running compression \n"
         << std::endl;
         return 0;
     } else {
@@ -372,8 +369,15 @@ int main(int argc, char** argv)
             }
         }
 
-        if (contains(argc, argv, "-l", "--load")) {
-            load_from_file = true;   
+        if (contains(argc, argv, "-l", "--load")) load_from_file = true;   
+
+        if (contains(argc, argv, "-s", "--scan")) scan_only = true;
+
+        if (scan_only && load_from_file) {
+            std::cout << "[ERROR] Cannot use scan and load together \n" 
+                      << "Please consult the help page by using -h or --help \n" 
+                      << std::endl; 
+            return 0;
         }
 
     }
@@ -518,16 +522,19 @@ int main(int argc, char** argv)
         }
     }
     
-
-    fs::directory_entry entry{path + "/0encoded"};
-    if (!entry.exists()) {
-        fs::create_directory(path + "/0encoded");
+    if (!scan_only) {
+        fs::directory_entry entry{path + "/0encoded"};
+        if (!entry.exists()) {
+            fs::create_directory(path + "/0encoded");
+        }
+        
+        for (auto& movie : movies) {
+            //TODO: Fetch argument two and three from argv
+            //TODO: Create logging file for user to see if ffmpeg crashed
+            cmd_exec(create_ffmpeg_argument(movie.second, "libx265", "-crf 21", path), "-v");
+        } 
     }
-    
-    for (auto& movie : movies) {
-        //TODO: Fetch argument two and three from argv
-        cmd_exec(create_ffmpeg_argument(movie.second, "libx265", "-crf 21", path), "-v");
-    } 
+
     return 0;
 }
 
