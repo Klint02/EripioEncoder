@@ -205,6 +205,7 @@ void calculate_movie_aspect_ratios (std::map<std::string, Video_file>* movies, P
             //std::cout << arg << std::endl;
             cmd_exec(arg, "");
             std::string movie_frame_path = movie.second.path.substr(0, movie.second.path.find_last_of(".")) + "." + std::to_string(i) + ".png";  
+            //TODO: only load image and run calculation if image exists
             Image frame = LoadImage(movie_frame_path.c_str());
             
             //Adjust to make it more or less discriminative of black pixels 
@@ -369,9 +370,9 @@ int main(int argc, char** argv)
             }
         }
 
-        if (contains(argc, argv, "-l", "--load")) load_from_file = true;   
-
-        if (contains(argc, argv, "-s", "--scan")) scan_only = true;
+        //no need to use ifs since they should be set to true if they are found
+        load_from_file = contains(argc, argv, "-l", "--load");   
+        scan_only = contains(argc, argv, "-s", "--scan");
 
         if (scan_only && load_from_file) {
             std::cout << "[ERROR] Cannot use scan and load together \n" 
