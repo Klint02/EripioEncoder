@@ -200,11 +200,18 @@ void calculate_movie_aspect_ratios (std::map<std::string, Video_file>* movies, P
 
         for(int i = 0; i < (int)timestamps.size(); i++) {
             Timestamp timestamp = timestamps.at(i); 
-            std::string arg = "ffmpeg -y -err_detect aggressive -fflags discardcorrupt -hide_banner -loglevel error -ss " + std::to_string(timestamp.hours) + ":" + std::to_string(timestamp.minutes) + ":" + std::to_string(timestamp.seconds) + " -i \"" + movie.second.path +"\" -vframes 1 \"" + movie.second.video_title + "." + std::to_string(i) + ".png\"";
+            //Using tmp folder instead of movie folder as it would otherwise kill HDD activity
+            //This would not work on windows because of hardcoded path
+            fs::directory_entry tmpfolder{"/tmp/eripio"};
+            if (!tmpfolder.exists()) {
+                fs::create_directory("/tmp/eripio");
+            }
+            std::string arg = "ffmpeg -y -err_detect aggressive -fflags discardcorrupt -hide_banner -loglevel error -ss " + std::to_string(timestamp.hours) + ":" + std::to_string(timestamp.minutes) + ":" + std::to_string(timestamp.seconds) + " -i \"" + movie.second.path +"\" -vframes 1 \"/tmp/eripio/" + movie.second.video_title + "." + std::to_string(i) + ".png\"";
             //Use only for debug 
             //std::cout << arg << std::endl;
             cmd_exec(arg, "");
-            std::string movie_frame_path = movie.second.path.substr(0, movie.second.path.find_last_of(".")) + "." + std::to_string(i) + ".png";  
+            std::string movie_frame_path = "/tmp/eripio/" + movie.second.video_title + "." + std::to_string(i) + ".png";
+            //std::string movie_frame_path = movie.second.path.substr(0, movie.second.path.find_last_of(".")) + "." + std::to_string(i) + ".png";  
             //TODO: only load image and run calculation if image exists
             Image frame = LoadImage(movie_frame_path.c_str());
             
