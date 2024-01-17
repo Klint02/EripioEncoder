@@ -360,7 +360,7 @@ int main(int argc, char** argv)
         << "    -l or --load \t Load config from a previous run \n"
         << "    -s or --scan \t Create config file without running compression \n"
         << "    -c or --check\t Verify encoded videos \n"
-        << "    \n Keep in mind that -s can only be used by itself \n"
+        << "    \n Keep in mind that -s can only be used by itself or with -l AND -c \n"
         << std::endl;
         return 0;
     } else {
@@ -385,20 +385,20 @@ int main(int argc, char** argv)
         scan_only = contains(argc, argv, "-s", "--scan");
         verify = contains(argc, argv, "-c", "--check");
 
-        if (scan_only && load_from_file) {
+        if (!verify && scan_only && load_from_file) {
             std::cout << "[ERROR] Cannot use scan and load together \n" 
                       << "Please consult the help page by using -h or --help \n" 
                       << std::endl; 
             return 0;
         }
-
+/*
         if (verify && scan_only) {
             std::cout << "[ERROR] Cannot use scan and verify together \n" 
                       << "Please consult the help page by using -h or --help \n" 
                       << std::endl; 
             return 0;
         }
-
+*/
     }
 
     if (!load_from_file) {
@@ -474,7 +474,6 @@ int main(int argc, char** argv)
 
                         switch (field_index) {
                             case 0:
-                            std::cout << field_index << std::endl;
                                 movie_key = struct_field;
                                 movie.path = struct_field;
                                 movies.insert({struct_field, movie});
@@ -516,8 +515,8 @@ int main(int argc, char** argv)
                                 }
                                 break;
                             case 4:
+                                //I don't remember why original height is 18000
                                 movies.at(movie_key).original_height = 18000;
-                                std::cout << stoi(struct_field) << std::endl;
                                 break;
                             case 5: 
                                 movies.at(movie_key).original_width = stoi(struct_field);
@@ -555,23 +554,27 @@ int main(int argc, char** argv)
     }
 
     if (verify) {
-        //TODO:check all encoded videos for duration; checking that it is not N/A and that the encoded file's duration is within 1-2 seconds of the original 
+        //TODO: Should also check if any of the files are missing. But verification would still fail right now without that check 
         for (auto& movie : movies) {
             bool movie_integrity_match = true;
             fs::directory_entry entry{path + "/0encoded/" + movie.second.video_title + ".mkv"};
             if (entry.exists()) {
 
             
-                std::string original_duration = cmd_exec("ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 \"" + movie.second.path + "\"", "v");
-                std::string encoded_duration = cmd_exec("ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 \"" + path + "/0encoded/" + movie.second.video_title + ".mkv" + "\"", "v");
+                std::string original_duration = cmd_exec("ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 \"" + movie.second.path + "\"", "");
+                std::string encoded_duration = cmd_exec("ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 \"" + path + "/0encoded/" + movie.second.video_title + ".mkv" + "\"", "");
                 
-                if (encoded_duration == "N/A" || "No such file or directory") {
+                if (encoded_duration == "N/A") {
                     movie_integrity_match = false;
+                    std::cout << "Duration of video was N/A, ffmpeg might have crashed while encoding this video" << std::endl;
                 }
 
                 //short circuiting should prevent exceptions with stoi
-                if (!(movie_integrity_match && (stoi(original_duration) - stoi(encoded_duration)) < 2 && (stoi(original_duration) - stoi(encoded_duration)) > -2)) {
+                if (!(movie_integrity_match && (stol(original_duration) - stol(encoded_duration)) < 2 && (stol(original_duration) - stol(encoded_duration)) > -2)) {
                     movie_integrity_match = false;
+                    std::cout << "Video durations did not match \n" 
+                              << stol(original_duration) << "\n"
+                              << stol(encoded_duration) << std::endl; 
                 }
 
             } else {
@@ -580,7 +583,7 @@ int main(int argc, char** argv)
 
             if (!movie_integrity_match) {
                 //TODO: Add logging for this
-                std::cout << movie.second.video_title << " failed verification please check yourself or just reencode original video" << std::endl;
+                std::cout << movie.second.video_title << " failed verification. Please check yourself or just reencode original video" << std::endl;
             }
         }
     }
