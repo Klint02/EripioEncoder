@@ -346,6 +346,7 @@ int main(int argc, char** argv)
 {
     bool load_from_file = false;
     bool scan_only = false;
+    bool verify = false;
     Program_status program_status;
     std::map<std::string, Video_file> movies;
 
@@ -358,6 +359,8 @@ int main(int argc, char** argv)
         << "    -p or --path \t Specify directory for encoding \n"
         << "    -l or --load \t Load config from a previous run \n"
         << "    -s or --scan \t Create config file without running compression \n"
+        << "    -c or --check\t Verify encoded videos \n"
+        << "    \n Keep in mind that -s can only be used by itself \n"
         << std::endl;
         return 0;
     } else {
@@ -380,9 +383,17 @@ int main(int argc, char** argv)
         //no need to use ifs since they should be set to true if they are found
         load_from_file = contains(argc, argv, "-l", "--load");   
         scan_only = contains(argc, argv, "-s", "--scan");
+        verify = contains(argc, argv, "-c", "--check");
 
         if (scan_only && load_from_file) {
             std::cout << "[ERROR] Cannot use scan and load together \n" 
+                      << "Please consult the help page by using -h or --help \n" 
+                      << std::endl; 
+            return 0;
+        }
+
+        if (verify && scan_only) {
+            std::cout << "[ERROR] Cannot use scan and verify together \n" 
                       << "Please consult the help page by using -h or --help \n" 
                       << std::endl; 
             return 0;
@@ -541,6 +552,37 @@ int main(int argc, char** argv)
             //TODO: Create logging file for user to see if ffmpeg crashed
             cmd_exec(create_ffmpeg_argument(movie.second, "libx265", "-crf 21", path), "-v");
         } 
+    }
+
+    if (verify) {
+        //TODO:check all encoded videos for duration; checking that it is not N/A and that the encoded file's duration is within 1-2 seconds of the original 
+        for (auto& movie : movies) {
+            bool movie_integrity_match = true;
+            fs::directory_entry entry{path + "/0encoded/" + movie.second.video_title + ".mkv"};
+            if (entry.exists()) {
+
+            
+                std::string original_duration = cmd_exec("ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 \"" + movie.second.path + "\"", "v");
+                std::string encoded_duration = cmd_exec("ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 \"" + path + "/0encoded/" + movie.second.video_title + ".mkv" + "\"", "v");
+                
+                if (encoded_duration == "N/A" || "No such file or directory") {
+                    movie_integrity_match = false;
+                }
+
+                //short circuiting should prevent exceptions with stoi
+                if (!(movie_integrity_match && (stoi(original_duration) - stoi(encoded_duration)) < 2 && (stoi(original_duration) - stoi(encoded_duration)) > -2)) {
+                    movie_integrity_match = false;
+                }
+
+            } else {
+                movie_integrity_match = false;
+            }
+
+            if (!movie_integrity_match) {
+                //TODO: Add logging for this
+                std::cout << movie.second.video_title << " failed verification please check yourself or just reencode original video" << std::endl;
+            }
+        }
     }
 
     return 0;
