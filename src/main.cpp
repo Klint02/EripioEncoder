@@ -564,13 +564,13 @@ int main(int argc, char** argv)
                 std::string original_duration = cmd_exec("ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 \"" + movie.second.path + "\"", "");
                 std::string encoded_duration = cmd_exec("ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 \"" + path + "/0encoded/" + movie.second.video_title + ".mkv" + "\"", "");
                 
-                if (encoded_duration == "N/A") {
+                if (encoded_duration.find("N/A") != std::string::npos) {
                     movie_integrity_match = false;
                     std::cout << "Duration of video was N/A, ffmpeg might have crashed while encoding this video" << std::endl;
                 }
 
                 //short circuiting should prevent exceptions with stoi
-                if (!(movie_integrity_match && (stol(original_duration) - stol(encoded_duration)) < 2 && (stol(original_duration) - stol(encoded_duration)) > -2)) {
+                if (movie_integrity_match && !((stol(original_duration) - stol(encoded_duration)) < 2 && (stol(original_duration) - stol(encoded_duration)) > -2)) {
                     movie_integrity_match = false;
                     std::cout << "Video durations did not match \n" 
                               << stol(original_duration) << "\n"
@@ -583,7 +583,7 @@ int main(int argc, char** argv)
 
             if (!movie_integrity_match) {
                 //TODO: Add logging for this
-                std::cout << movie.second.video_title << " failed verification. Please check yourself or just reencode original video" << std::endl;
+                std::cout << movie.second.video_title << " failed verification. Please check yourself or just reencode original video \n" << std::endl;
             }
         }
     }
