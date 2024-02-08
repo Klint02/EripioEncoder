@@ -311,8 +311,13 @@ inline std::string create_ffmpeg_argument(Video_file movie, std::string video_co
     std::string subtile_demap = "";
 
     for (u_int32_t i = 0; i < movie.subtitle_langs.size(); i++) {
-        subtitle_metadata_args += " -map " + std::to_string(i+1) + ":s -metadata:s:s:" + std::to_string(i) + " language=" + movie.subtitle_langs[i];
-        subtitle_input_args += "-i \"" + path + "/" +  movie.video_title + "." + movie.subtitle_langs[i] + ".srt\" ";
+        //Skips the addition of another subtitle track if there is no language
+        //Because it would otherwise make ffmpeg look after MOVIETITLE..mkv
+        if (movie.subtitle_langs[i].length() > 0) {
+            subtitle_metadata_args += " -map " + std::to_string(i+1) + ":s -metadata:s:s:" + std::to_string(i) + " language=" + movie.subtitle_langs[i];
+            subtitle_input_args += "-i \"" + path + "/" +  movie.video_title + "." + movie.subtitle_langs[i] + ".srt\" ";
+        }
+
     }
 
     if (subtitle_metadata_args.size() > 0) { 
@@ -321,7 +326,7 @@ inline std::string create_ffmpeg_argument(Video_file movie, std::string video_co
     }
 
     
-    return "ffmpeg -i \"" + movie.path + "\" " + subtitle_input_args +  " -map 0 -codec:v " + video_codec + " " + constant_rate_factor + " " + video_crop_args + " " + audio_args + subtile_demap + subtitle_metadata_args + " " + " -metadata title=\"" + movie.video_title + "\" \"" + path + "/0encoded/" + movie.video_title + ".mkv\"";
+    return "ffmpeg -i \"" + movie.path + "\" " + subtitle_input_args +  " -map 0 -codec:v " + video_codec + " " + constant_rate_factor + " -pix_fmt yuv420p10le -preset slow -x265-params \"limit-sao=1:bframes=8:psy-rd=1:aq-mode=3\" " + video_crop_args + " " + audio_args + subtile_demap + subtitle_metadata_args + " " + " -metadata title=\"" + movie.video_title + "\" \"" + path + "/0encoded/" + movie.video_title + ".mkv\"";
 }
 
 /*
@@ -549,7 +554,7 @@ int main(int argc, char** argv)
         for (auto& movie : movies) {
             //TODO: Fetch argument two and three from argv
             //TODO: Create logging file for user to see if ffmpeg crashed
-            cmd_exec(create_ffmpeg_argument(movie.second, "libx265", "-crf 21", path), "-v");
+            cmd_exec(create_ffmpeg_argument(movie.second, "libx265", "-crf 17", path), "-v");
         } 
     }
 
