@@ -104,7 +104,11 @@ std::string cmd_exec(std::string arg, std::string flag) {
 }
 
 
-void determine_audio_tracks(std::map<std::string, Video_file>* movies, Program_status *program_status) {
+void determine_audio_tracks(std::map<std::string, Video_file>* movies, Program_status *program_status, bool disable_audio_encode) {
+    if (disable_audio_encode) {
+        std::cout << "Audio enconding was disabled. Closing thread" << std::endl;
+        return;
+    }
     for (auto& movie : *movies) {
         program_status->audio_track_thread_running = true;
 
@@ -127,7 +131,11 @@ void determine_audio_tracks(std::map<std::string, Video_file>* movies, Program_s
 }
 
 
-void convert_subtitles(std::map<std::string, Video_file>* movies, Program_status *program_status, std::string folder_path) {
+void convert_subtitles(std::map<std::string, Video_file>* movies, Program_status *program_status, std::string folder_path, bool disable_subtitle_conversion) {
+    if (disable_subtitle_conversion) {
+        std::cout << "Subtitle conversion was disabled. Closing thread" << std::endl;
+        return;
+    }
     for (auto& movie : *movies) {
         cmd_exec("subtitleedit /convert \"" + movie.second.path + "\" subrip", "v");
     }
@@ -180,7 +188,12 @@ inline std::vector<Timestamp> create_timestamps(int duration) {
 }
 
 //TODO: Find a way to sort the corrupted frames from the good (lego movie for testing)
-void calculate_movie_aspect_ratios (std::map<std::string, Video_file>* movies, Program_status *program_status, std::string folder_path) {
+void calculate_movie_aspect_ratios (std::map<std::string, Video_file>* movies, Program_status *program_status, std::string folder_path, bool disable_video_encode) {
+    if (disable_video_encode) {
+        std::cout << "Video encoding was disabled. Closing thread" << std::endl;
+        return;
+    }
+
     for (auto& movie : *movies) {
         std::string aspect_ratios = cmd_exec("ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of default=nw=1:nk=1 \"" + movie.second.path + "\"", "");
         //output must be 
@@ -296,37 +309,45 @@ void calculate_movie_aspect_ratios (std::map<std::string, Video_file>* movies, P
     }
 }
 
-inline std::string create_ffmpeg_argument(Video_file movie, std::string video_codec, std::string constant_rate_factor, std::string path) {
-    
-    std::string audio_args = "";
-    for (u_int32_t i = 0; i < movie.audio_channel_count.size(); i++) {
+inline std::string create_ffmpeg_argument(Video_file movie, std::string video_codec, std::string constant_rate_factor, std::string path, bool disable_video_encode, bool disable_audio_encode, bool disable_subtitle_conversion) {
+    std::string video_crop = "-filter:v \"crop=" + std::to_string(movie.width[1] - movie.width[0]) +  ":" + std::to_string(movie.height[1] - movie.height[0]) +  ":" + std::to_string(movie.width[0]) + ":" + std::to_string(movie.height[0]) + "\"";
 
-        audio_args += "-c:a:" + std::to_string(i) + " eac3 ";
-        if (movie.audio_channel_count[i] > 6) audio_args += "-ac:a:" + std::to_string(i) + " 6 ";
+    std::string ffmpeg_inputs_arg = "-i \"" + movie.path + "\" ";
+    std::string ffmpeg_video_encode_arg = disable_video_encode ? "-codec:v copy " : "-codec:v " + video_codec + " " + constant_rate_factor + " " + video_crop + " ";
+    std::string ffmpeg_audio_encode_arg = disable_audio_encode ? "-codec:a copy " : "";
+    std::string ffmpeg_subtitle_metadata_arg = "";
+
+    if (!disable_audio_encode) {
+        for (u_int32_t i = 0; i < movie.audio_channel_count.size(); i++) {
+
+            ffmpeg_audio_encode_arg += "-c:a:" + std::to_string(i) + " eac3 ";
+            if (movie.audio_channel_count[i] > 6) ffmpeg_audio_encode_arg += "-ac:a:" + std::to_string(i) + " 6 ";
+        }
     }
-    std::string video_crop_args = "-filter:v \"crop=" + std::to_string(movie.width[1] - movie.width[0]) +  ":" + std::to_string(movie.height[1] - movie.height[0]) +  ":" + std::to_string(movie.width[0]) + ":" + std::to_string(movie.height[0]) + "\"";
-    
-    std::string subtitle_metadata_args = "";
-    std::string subtitle_input_args = "";
-    std::string subtile_demap = "";
 
-    for (u_int32_t i = 0; i < movie.subtitle_langs.size(); i++) {
-        //Skips the addition of another subtitle track if there is no language
-        //Because it would otherwise make ffmpeg look after MOVIETITLE..mkv
-        if (movie.subtitle_langs[i].length() > 0) {
-            subtitle_metadata_args += " -map " + std::to_string(i+1) + ":s -metadata:s:s:" + std::to_string(i) + " language=" + movie.subtitle_langs[i];
-            subtitle_input_args += "-i \"" + path + "/" +  movie.video_title + "." + movie.subtitle_langs[i] + ".srt\" ";
+    if (!disable_subtitle_conversion) {
+        for (u_int32_t i = 0; i < movie.subtitle_langs.size(); i++) {
+            //Skips the addition of another subtitle track if there is no language
+            //Because it would otherwise make ffmpeg look after MOVIETITLE..mkv
+            if (movie.subtitle_langs[i].length() > 0) {
+                ffmpeg_subtitle_metadata_arg += " -map " + std::to_string(i+1) + ":s -metadata:s:s:" + std::to_string(i) + " language=" + movie.subtitle_langs[i];
+                ffmpeg_inputs_arg += "-i \"" + path + "/" +  movie.video_title + "." + movie.subtitle_langs[i] + ".srt\" ";
+            }
+
         }
 
-    }
+        if (ffmpeg_subtitle_metadata_arg.size() > 0) { 
+            ffmpeg_subtitle_metadata_arg += " -c:s copy";
+            //demapping old subs embedded in file
+            ffmpeg_subtitle_metadata_arg += " -map -0:s ";
 
-    if (subtitle_metadata_args.size() > 0) { 
-        subtitle_metadata_args += " -c:s copy";
-        subtile_demap = " -map -0:s ";
+        }
     }
-
-    
-    return "ffmpeg -i \"" + movie.path + "\" " + subtitle_input_args +  " -map 0 -codec:v " + video_codec + " " + constant_rate_factor + " -pix_fmt yuv420p10le -preset slow -x265-params \"limit-sao=1:bframes=8:psy-rd=1:aq-mode=3\" " + video_crop_args + " " + audio_args + subtile_demap + subtitle_metadata_args + " " + " -metadata title=\"" + movie.video_title + "\" \"" + path + "/0encoded/" + movie.video_title + ".mkv\"";
+    if (disable_video_encode + disable_video_encode + disable_subtitle_conversion != 3) {
+        return "ffmpeg " + ffmpeg_inputs_arg +  " -map 0 " + ffmpeg_video_encode_arg + ffmpeg_audio_encode_arg + ffmpeg_subtitle_metadata_arg + " " + " -metadata title=\"" + movie.video_title + "\" \"" + path + "/0encoded/" + movie.video_title + ".mkv\"";
+    } else {
+        return "mkvpropedit \"" + movie.path + "\" --edit info --set \"title=" + movie.video_title + "\"";
+    }
 }
 
 /*
@@ -352,6 +373,9 @@ int main(int argc, char** argv)
     bool load_from_file = false;
     bool scan_only = false;
     bool verify = false;
+    bool disable_video_encode = true;
+    bool disable_audio_encode = true;
+    bool disable_subtitle_conversion = true;
     Program_status program_status;
     std::map<std::string, Video_file> movies;
 
@@ -360,12 +384,18 @@ int main(int argc, char** argv)
     if (contains(argc, argv, "-h", "--help")) {
         std::cout 
         << "Welcome to the encoder \n" 
-        << "    -h or --help \t This message \n\n"
-        << "    -p or --path \t Specify directory for encoding \n"
-        << "    -l or --load \t Load config from a previous run \n"
-        << "    -s or --scan \t Create config file without running compression \n"
-        << "    -c or --check\t Verify encoded videos \n"
-        << "    \n Keep in mind that -s can only be used by itself or with -l AND -c \n"
+        << "    -h  or --help \t This message \n\n"
+        << "    -p  or --path \t Specify directory for encoding \n"
+        << "    -l  or --load \t Load config from a previous run \n"
+        << "    -s  or --scan \t Create config file without running compression \n"
+        << "    -c  or --check\t Verify encoded videos \n"
+        << "    \n  Keep in mind that -s can only be used by itself or with -l AND -c \n\n"
+        << "  Use the following to bypass part of the encoder \n"
+        << "    -r  or --remux\t Sets the title tag in the mkv \n"
+        << "    -da \t \t Disables the audio encoder \n"
+        << "    -dv \t \t Disables the video encoder \n"
+        << "    -ds \t \t Disables the subtitle converter \n"
+        << "    -da -dv -ds is the same as -r og --remux \n"
         << std::endl;
         return 0;
     } else {
@@ -389,6 +419,9 @@ int main(int argc, char** argv)
         load_from_file = contains(argc, argv, "-l", "--load");   
         scan_only = contains(argc, argv, "-s", "--scan");
         verify = contains(argc, argv, "-c", "--check");
+        disable_video_encode = contains(argc, argv, "-r", "--remux") || contains(argc, argv, "-dv");
+        disable_audio_encode = contains(argc, argv, "-r", "--remux") || contains(argc, argv, "-da");
+        disable_subtitle_conversion = contains(argc, argv, "-r", "--remux") || contains(argc, argv, "-ds");
 
         if (!verify && scan_only && load_from_file) {
             std::cout << "[ERROR] Cannot use scan and load together \n" 
@@ -425,13 +458,13 @@ int main(int argc, char** argv)
         //TODO: Create logging screen with ncurses
         //std::thread logger_thread (logger, &program_status);
         std::cout << "[INFO] Starting subtitle conversion" << std::endl;
-        std::thread convert_subtitles_thread (convert_subtitles, &movies, &program_status, path);
+        std::thread convert_subtitles_thread (convert_subtitles, &movies, &program_status, path, disable_subtitle_conversion);
 
         std::cout << "[INFO] Starting audio track counting thread" << std::endl;
-        std::thread audio_track_thread (determine_audio_tracks, &movies, &program_status);
+        std::thread audio_track_thread (determine_audio_tracks, &movies, &program_status, disable_audio_encode);
 
         std::cout << "[INFO] Starting aspect ratio calculation thread" << std::endl;
-        std::thread aspect_ratio_calculation_thread (calculate_movie_aspect_ratios, &movies, &program_status, path);
+        std::thread aspect_ratio_calculation_thread (calculate_movie_aspect_ratios, &movies, &program_status, path, disable_video_encode);
     
         convert_subtitles_thread.join();
         audio_track_thread.join();
@@ -554,7 +587,7 @@ int main(int argc, char** argv)
         for (auto& movie : movies) {
             //TODO: Fetch argument two and three from argv
             //TODO: Create logging file for user to see if ffmpeg crashed
-            cmd_exec(create_ffmpeg_argument(movie.second, "libx265", "-crf 17", path), "-v");
+            cmd_exec(create_ffmpeg_argument(movie.second, "libx265", "-crf 21", path, disable_video_encode, disable_audio_encode, disable_subtitle_conversion), "-v");
         } 
     }
 
