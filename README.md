@@ -18,7 +18,7 @@ cd build
 
 cmake ..
 
-build
+make
 ```
 
 ## Usage:
