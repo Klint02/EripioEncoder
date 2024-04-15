@@ -7,12 +7,18 @@ A simple frontend for FFMPEG written in c++ that batch converts .mkv files.
 - FFMPEG 
 - subtitleedit-cli or subtitleedit
     - tesseract ocr data packages (specific for the languages you want to convert)
+- mkvtoolnix-cli (metadata editing during remuxing)
 - raylib (for image processing)
 
 ## Compilation:
 ```
 mkdir build
-g++ -lraylib -Wall -Werror src/main.cpp -o build/encoder
+
+cd build
+
+cmake ..
+
+build
 ```
 
 ## Usage:
