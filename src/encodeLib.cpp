@@ -2,6 +2,7 @@
 #include <iostream>
 #include <map>
 #include <vector>
+#include <fstream>
 #include <filesystem>
 #include "encodeLib.hpp"
 #include "raylib.h"
@@ -27,6 +28,7 @@ bool contains(int len, char** arr, std::string str1, std::string str2) {
 }
 
 std::string cmd_exec(std::string arg, std::string flag) {
+    std::cout << "Executing: \"" << arg << "\"" << std::endl;
     char output_buffer [1024];
     std::string final_output;
     FILE *process = popen(arg.c_str() , "r");
@@ -151,12 +153,8 @@ void calculate_movie_aspect_ratios (std::map<std::string, Video_file>* movies, E
         for(int i = 0; i < (int)timestamps.size(); i++) {
             Timestamp timestamp = timestamps.at(i); 
             //Using tmp folder instead of movie folder as it would otherwise kill HDD activity
-            std::string tmp_folderpath = fs::temp_directory_path();
-            tmp_folderpath = tmp_folderpath + "/eripio/";
-            fs::directory_entry tmpfolder{ tmp_folderpath };
-            if (!tmpfolder.exists()) {
-                fs::create_directory(tmp_folderpath);
-            }
+            std::string tmp_folderpath = create_tmp_directory();
+
             std::string arg = "ffmpeg -y -err_detect aggressive -fflags discardcorrupt -hide_banner -loglevel error -ss " + std::to_string(timestamp.hours) + ":" + std::to_string(timestamp.minutes) + ":" + std::to_string(timestamp.seconds) + " -i \"" + movie.second.path +"\" -vframes 1 \"" + tmp_folderpath + movie.second.video_title + "." + std::to_string(i) + ".png\"";
             //Use only for debug 
             //std::cout << arg << std::endl;
@@ -296,4 +294,73 @@ std::string create_ffmpeg_argument(Video_file movie, std::string video_codec, st
         }
     }
     return "ffmpeg " + ffmpeg_inputs_arg +  " -map 0 " + ffmpeg_video_encode_arg + ffmpeg_audio_encode_arg + ffmpeg_subtitle_metadata_arg + " " + " -metadata title=\"" + movie.video_title + "\" \"" + inputs.path + "/0encoded/" + movie.video_title + ".mkv\"";
+}
+
+void recutter(std::string path) {
+    std::string tmp_folder_path = create_tmp_directory();
+    std::vector<Recutter_video_file> video_files;
+    std::string line;
+    std::ifstream config_file(path + "/recutter.txt");
+    if (config_file.is_open()) {
+        while (getline(config_file, line)) {
+            //std::cout << line << std::endl;
+            switch (line[0])
+            {
+            case '#':
+                video_files.push_back(Recutter_video_file());
+                video_files.back().name = line.substr(2);
+                break;
+            
+            case '%':
+                if (video_files.size() == 0) 
+                {
+                    std::cout << "Recutter tried to insert timestamp, but no file was given" << std::endl; 
+                    return;
+                } 
+                
+                video_files.back().timestamps.push_back(Timestamp_pair());
+                video_files.back().timestamps.back().start = line.substr(2,8);
+                video_files.back().timestamps.back().end = line.substr(11,8);
+                video_files.back().timestamps.back().chapter_marked = stoi(line.substr(20,1));
+                break;
+            default:
+                break;
+            }
+        }
+    }
+    for (auto& video_file : video_files) {
+        std::cout << video_file.name << std::endl;
+        std::string clip_string = "";
+        std::string chapter_metadata_string = ";FFMETADATA1 \n\n";
+        u_int8_t chapter_count = 1;
+        u_int32_t chapter_seconds_timestamp = 0;
+        for (u_int8_t i = 0; i < video_file.timestamps.size(); i++) {
+            cmd_exec("ffmpeg -i \"" + video_file.name + "\" -map 0 -c copy -ss " + video_file.timestamps[i].start + " -to " + video_file.timestamps[i].end + " -y \"" + tmp_folder_path +  "clip" + std::to_string(i) + ".mkv\"", "v");
+            clip_string += "file '" + tmp_folder_path + "clip" + std::to_string(i) + ".mkv'\n";
+            int clip_length = std::stoi(video_file.timestamps[i].end.substr(0, 2)) * 3600 + std::stoi(video_file.timestamps[i].end.substr(3, 2)) * 60 + std::stoi(video_file.timestamps[i].end.substr(6, 2));
+            clip_length -= std::stoi(video_file.timestamps[i].start.substr(0, 2)) * 3600 + std::stoi(video_file.timestamps[i].start.substr(3, 2)) * 60 + std::stoi(video_file.timestamps[i].start.substr(6, 2));
+            if (video_file.timestamps[i].chapter_marked) {
+                chapter_metadata_string += "[CHAPTER]\nTIMEBASE=1/1000\nSTART=" + std::to_string(chapter_seconds_timestamp*1000) +"\nEND=" +std::to_string(chapter_seconds_timestamp*1000) + "\ntitle=Chapter " + std::to_string(chapter_count) + "\n\n";
+                chapter_count++;
+            }
+            chapter_seconds_timestamp += clip_length;
+        }
+        std::ofstream clips(tmp_folder_path + "clips.txt", std::ios::trunc);
+        clips << clip_string;
+        clips.close();
+        std::ofstream metadata(tmp_folder_path + "metadata.txt", std::ios::trunc);
+        metadata << chapter_metadata_string;
+        metadata.close();
+        std::cout << "ffmpeg -f concat -safe 0 -i \"" + tmp_folder_path + "clips.txt\" " + "-i \"" + tmp_folder_path + "metadata.txt\" -map_metadata 1 -map 0 -c copy output.mkv" << std::endl;
+        //cmd_exec("ffmpeg -i \"" + clip_string + "\" -c copy " + chapter_metadata_string + " output.mkv", "v");
+    }
+}
+std::string create_tmp_directory () {
+    std::string tmp_folderpath = fs::temp_directory_path();
+    tmp_folderpath = tmp_folderpath + "/eripio/";
+    fs::directory_entry tmpfolder{ tmp_folderpath };
+    if (!tmpfolder.exists()) {
+        fs::create_directory(tmp_folderpath);
+    }
+    return tmp_folderpath;
 }

@@ -6,6 +6,7 @@ struct EncodeLibInputs
     bool disable_video_encode = true;
     bool disable_audio_encode = true;
     bool disable_subtitle_conversion = true;
+    bool recutter_enabled = false;
     int forced_sub_index = -1;
     int non_forced_sub_index = -1;
 
@@ -58,6 +59,17 @@ struct Video_file {
     }
 };
 
+struct Timestamp_pair {
+    std::string start;
+    std::string end;
+    int chapter_marked;
+};
+
+struct Recutter_video_file {
+    std::string name;
+    std::vector<Timestamp_pair> timestamps;
+};
+
 enum { LETTERBOX, PILLARBOX , FULLBOX, UNDEFINED = -1 };
 
 const int THIRTY_MINUTES = 60*30;
@@ -91,6 +103,10 @@ inline std::vector<Timestamp> create_timestamps(int duration);
 void calculate_movie_aspect_ratios(std::map<std::string, Video_file>* movies, EncodeLibInputs inputs);
 
 std::string create_ffmpeg_argument(Video_file movie, std::string video_codec, std::string constant_rate_factor, EncodeLibInputs inputs);
+
+void recutter(std::string path);
+
+std::string create_tmp_directory();
 
 /*
 void logger(Program_status *program_status) {

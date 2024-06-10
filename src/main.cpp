@@ -34,6 +34,8 @@ int main(int argc, char** argv)
         << "    -da -dv -ds is the same as -r og --remux \n\n\n"
         << "    -fs \t \t Changes the provided subtitle track index to forced \n"
         << "    -dfs \t \t Changes the provided subtitle track index to not be forced \n"
+        << "\n\n"
+        << "    --recutter \t\t Provide timestamps in a file from and to where it should make clips\n"
         << std::endl;
         return 0;
     } else {
@@ -60,6 +62,7 @@ int main(int argc, char** argv)
         inputs.disable_video_encode = contains(argc, argv, "-r", "--remux") || contains(argc, argv, "-dv");
         inputs.disable_audio_encode = contains(argc, argv, "-r", "--remux") || contains(argc, argv, "-da");
         inputs.disable_subtitle_conversion = contains(argc, argv, "-r", "--remux") || contains(argc, argv, "-ds");
+        inputs.recutter_enabled = contains(argc, argv, "--recutter");
 
         if (!inputs.verify && inputs.scan_only && inputs.load_from_file) {
             std::cout << "[ERROR] Cannot use scan and load together \n" 
@@ -106,7 +109,10 @@ int main(int argc, char** argv)
         }
 */
     }
-
+    if (inputs.recutter_enabled) {
+        recutter(inputs.path);
+        return 0;
+    }
     if (!inputs.load_from_file) {
         std::cout << "[INFO] Determining audio tracks for movies" << std::endl;
         for (const auto& entry : fs::directory_iterator(inputs.path)) 
